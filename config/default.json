@@ -1,0 +1,62 @@
+{
+  "year": 2022,
+  "start_run": 1000,
+  "end_run": 1010,
+  "restrict_to_good_runs": false,
+
+  "data_folder": "/path/to/root/files",
+  "output_folder": "./output",
+  "runinfo_path": "./config/runinfo.json",
+  "good_runs_path": "./config/good_runs.txt",
+
+  "root_filename_prefix": "processed_output_",
+  "root_filename_suffix": ".root",
+  "tmcs0_tree_name": "tmcs_0",
+  "tmcs1_tree_name": "tmcs_1",
+  "tems_tree_name": "tems",
+
+  "use_runinfo_windows": false,
+  "runinfo_times_in_seconds": false,
+
+  "default_window": {
+    "signal_start_us": 0.0,
+    "signal_end_us": 2000000.0,
+    "background_start_us": 3000000.0
+  },
+
+  "template_config": {
+    "native_bin_width_us": 0.25,
+    "pulse_start_offset_us": 5.0,
+    "rise_us": 0.8,
+    "fast_decay_us": 8.0,
+    "slow_decay_us": 60.0
+  },
+
+  "region_settings": {
+    "coarse_bin_width_us": 1.0,
+    "fine_bin_width_us": 0.25,
+    "min_gap_us": 10.0,
+    "coincidence_window_us": 0.1,
+    "coincidence_min_hits": 2,
+    "seed_veto_window_us": 2.0,
+    "background_duration_us": 60000000.0,
+    "background_iterations": 10,
+    "background_tolerance_fraction": 0.01,
+    "enable_background_fit": true,
+    "debug": false
+  },
+
+  "fit_settings": {
+    "scan_step_us": 0.5,
+    "max_offset_us": 5.0,
+    "delta_nll_cut": 10.0,
+    "min_spacing_us": 2.0,
+    "min_amplitude_pe": 5.0,
+    "max_amplitude_pe": 300.0,
+    "background_per_bin": 0.0,
+    "cluster_gap_us": 1.0,
+    "max_coordinate_descent_steps": 20,
+    "enable_back_pruning": true,
+    "debug": false
+  }
+}
