@@ -1,8 +1,8 @@
 {
   "year": 2022,
-  "start_run": 1000,
-  "end_run": 1010,
-  "restrict_to_good_runs": false,
+  "start_run": 26601,
+  "end_run": 28838,
+  "restrict_to_good_runs": true,
 
   "data_folder": "/path/to/root/files",
   "output_folder": "./output",
@@ -25,11 +25,13 @@
   },
 
   "template_config": {
-    "native_bin_width_us": 0.25,
-    "pulse_start_offset_us": 5.0,
-    "rise_us": 0.8,
-    "fast_decay_us": 8.0,
-    "slow_decay_us": 60.0
+    "native_bin_width_us": 0.5,
+    "support_end_us": 100.0,
+    "fast_amplitude": 0.04136345,
+    "fast_rate": 1.5729156,
+    "slow_amplitude": 0.12074081,
+    "slow_rate": 1.54832358,
+    "start_offset_us": 4.5
   },
 
   "region_settings": {

@@ -103,10 +103,12 @@ void BatchAnalysisRunner::run() const {
 
     DoubleExponentialPulseTemplate pulse_template(
         cfg_.template_config.native_bin_width_us,
-        cfg_.template_config.pulse_start_offset_us,
-        cfg_.template_config.rise_us,
-        cfg_.template_config.fast_decay_us,
-        cfg_.template_config.slow_decay_us
+        cfg_.template_config.support_end_us,
+        cfg_.template_config.fast_amplitude,
+        cfg_.template_config.fast_rate,
+        cfg_.template_config.slow_amplitude,
+        cfg_.template_config.slow_rate,
+        cfg_.template_config.start_offset_us
     );
 
     GreedyLRTFitter fitter(pulse_template);

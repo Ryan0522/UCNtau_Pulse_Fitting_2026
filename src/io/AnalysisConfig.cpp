@@ -92,14 +92,18 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         const json& t = j.at("template_config");
         cfg.template_config.native_bin_width_us =
             get_or<double>(t, "native_bin_width_us", cfg.template_config.native_bin_width_us);
-        cfg.template_config.pulse_start_offset_us =
-            get_or<double>(t, "pulse_start_offset_us", cfg.template_config.pulse_start_offset_us);
-        cfg.template_config.rise_us =
-            get_or<double>(t, "rise_us", cfg.template_config.rise_us);
-        cfg.template_config.fast_decay_us =
-            get_or<double>(t, "fast_decay_us", cfg.template_config.fast_decay_us);
-        cfg.template_config.slow_decay_us =
-            get_or<double>(t, "slow_decay_us", cfg.template_config.slow_decay_us);
+        cfg.template_config.support_end_us =
+            get_or<double>(t, "support_end_us", cfg.template_config.support_end_us);
+        cfg.template_config.fast_amplitude =
+            get_or<double>(t, "fast_amplitude", cfg.template_config.fast_amplitude);
+        cfg.template_config.fast_rate =
+            get_or<double>(t, "fast_rate", cfg.template_config.fast_rate);
+        cfg.template_config.slow_amplitude =
+            get_or<double>(t, "slow_amplitude", cfg.template_config.slow_amplitude);
+        cfg.template_config.slow_rate =
+            get_or<double>(t, "slow_rate", cfg.template_config.slow_rate);
+        cfg.template_config.start_offset_us =
+            get_or<double>(t, "start_offset_us", cfg.template_config.start_offset_us);        
     }
 
     if (j.contains("region_settings")) {
