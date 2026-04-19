@@ -9,8 +9,6 @@ public:
     virtual ~PulseTemplate() = default;
 
     virtual double native_bin_width_us() const = 0;
-    virtual double start_offset_us() const = 0;
-
     virtual std::vector<double> pmf() const = 0;
     virtual double integral(double t0_us, double t1_us) const = 0;
 

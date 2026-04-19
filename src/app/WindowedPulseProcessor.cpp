@@ -166,7 +166,7 @@ std::vector<double> WindowedPulseProcessor::build_carry_expected(const std::vect
     double template_support_us = static_cast<double>(pulse_template_.pmf().size()) * pulse_template_.native_bin_width_us();
 
     for (const PulseCandidate& pulse : carry_pulses) {
-        double template_start_us = pulse.time_us - pulse_template_.start_offset_us();
+        double template_start_us = pulse.time_us;
         double template_end_us = template_start_us + template_support_us;
         if (template_end_us <= window_start_us) {
             continue;

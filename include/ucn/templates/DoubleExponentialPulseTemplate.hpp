@@ -17,7 +17,6 @@ public:
     );
 
     double native_bin_width_us() const override;
-    double start_offset_us() const override;
 
     std::vector<double> pmf() const override;
     double integral(double t0_us, double t1_us) const override;
