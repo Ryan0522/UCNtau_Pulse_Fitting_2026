@@ -1,4 +1,4 @@
-#include "ucn/templates/DoubleExpPulseTemplate.hpp"
+#include "ucn/templates/DoubleExponentialPulseTemplate.hpp"
 
 #include <algorithm>
 #include <cmath>

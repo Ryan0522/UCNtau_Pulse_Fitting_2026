@@ -18,6 +18,7 @@ struct WindowSummary {
     int observed_count = 0;
     double expected_count = 0.0;
     double final_nll = 0.0;
+    int seed_count = 0;
 };
 
 struct TaggedPulse {

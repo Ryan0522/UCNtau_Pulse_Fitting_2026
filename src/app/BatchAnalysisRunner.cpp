@@ -31,7 +31,7 @@ void write_summary_header(std::ofstream& out) {
 
 void write_pulse_header(std::ofstream& out) {
     out << "run,segment,region,time_us,amplitude_pe,window_index,window_width_us,"
-           "is_pileup,uses_fine_bins\n";
+       "is_pileup,uses_fine_bins,background_rate_hz\n";
 }
 
 void write_window_header(std::ofstream& out) {
@@ -83,6 +83,14 @@ BatchAnalysisRunner::BatchAnalysisRunner(const io::AnalysisConfig& cfg)
 void BatchAnalysisRunner::run() const {
     fs::create_directories(cfg_.output_folder);
 
+    const fs::path metadata_path = fs::path(cfg_.output_folder) / "analysis_metadata.json";
+    std::ofstream meta_out(metadata_path);
+    meta_out << "{\n"
+            << "  \"start_run\": " << cfg_.start_run << ",\n"
+            << "  \"end_run\": " << cfg_.end_run << ",\n"
+            << "  \"year\": " << cfg_.year << "\n"
+            << "}\n";
+
     const fs::path summary_path = fs::path(cfg_.output_folder) / "run_segment_summary.csv";
     const fs::path pulses_path  = fs::path(cfg_.output_folder) / "all_pulses.csv";
     const fs::path windows_path = fs::path(cfg_.output_folder) / "all_windows.csv";
@@ -129,7 +137,7 @@ void BatchAnalysisRunner::run() const {
                     continue;
                 }
 
-                RegionResult result = processor.run(
+                RegionResult result = processor.analyze(
                     seg.hits,
                     window.signal_start_us,
                     window.signal_end_us,

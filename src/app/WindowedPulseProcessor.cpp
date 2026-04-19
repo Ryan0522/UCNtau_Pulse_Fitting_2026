@@ -254,8 +254,6 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
             continue;
         }
 
-        double expected_sum = std::accumulate(fit.expected_total.begin(), fit.expected_total.end(), 0.0);
-        double observed_sum = std::accumulate(histogram.counts.begin(), histogram.counts.end(), 0.0);
         std::vector<double> full_expected = fit.expected_total;
         if (window_fit_settings.background_per_bin > 0.0) {
             for (double& value : full_expected) {
@@ -267,6 +265,8 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
                 full_expected[j] += window_fit_settings.fixed_expected[j];
             }
         }
+        double expected_sum = std::accumulate(fit.expected_total.begin(), fit.expected_total.end(), 0.0);
+        double observed_sum = std::accumulate(histogram.counts.begin(), histogram.counts.end(), 0.0);
 
         WindowSummary summary;
         summary.window_index = window_index;
@@ -277,6 +277,7 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
         summary.observed_count = static_cast<int>(std::llround(observed_sum));
         summary.expected_count = expected_sum;
         summary.final_nll = -compute_log_likelihood(histogram.counts, full_expected);
+        summary.seed_count = static_cast<int>(seeds.size());
         output_summaries.push_back(summary);
 
         double template_support_us = static_cast<double>(pulse_template_.pmf().size()) * pulse_template_.native_bin_width_us();
