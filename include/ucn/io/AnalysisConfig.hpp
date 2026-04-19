@@ -16,7 +16,7 @@ struct PulseTemplateConfig {
     double fast_rate = 1.5729156;
     double slow_amplitude = 0.12074081;
     double slow_rate = 1.54832358;
-    double start_offset_us = 4.5;
+    double start_offset_us = 0.0;
 };
 
 struct RunWindow {

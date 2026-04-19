@@ -1,13 +1,13 @@
 {
   "year": 2022,
-  "start_run": 26601,
-  "end_run": 28838,
+  "start_run": 26308,
+  "end_run": 26309,
   "restrict_to_good_runs": true,
 
-  "data_folder": "/path/to/root/files",
-  "output_folder": "./output",
-  "runinfo_path": "./config/runinfo.json",
-  "good_runs_path": "./config/good_runs.txt",
+  "data_folder": "./data/",
+  "output_folder": "./output/",
+  "runinfo_path": "./config/betteroutput2022.json",
+  "good_runs_path": "./config/2022runlist.txt",
 
   "root_filename_prefix": "processed_output_",
   "root_filename_suffix": ".root",

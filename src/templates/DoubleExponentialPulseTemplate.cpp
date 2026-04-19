@@ -18,7 +18,7 @@ std::vector<double> build_double_exp(
     double slow_amplitude, 
     double support_end_us
 ) {
-    if (native_bin_width_us <= 0.0 || start_offset_us <= 0.0 || support_end_us <= 0.0) {
+    if (native_bin_width_us <= 0.0 || support_end_us <= 0.0) {
         throw std::invalid_argument("Double-exponential parameters must be positive.");
     }
 
@@ -73,10 +73,6 @@ double DoubleExponentialPulseTemplate::native_bin_width_us() const {
     return native_bin_width_us_;
 }
 
-double DoubleExponentialPulseTemplate::start_offset_us() const {
-    return start_offset_us_;
-}
-
 std::vector<double> DoubleExponentialPulseTemplate::pmf() const {
     return pmf_unit_;
 }
@@ -94,7 +90,7 @@ std::vector<double> DoubleExponentialPulseTemplate::shifted_to_histogram(
     double pulse_time_us,
     const std::vector<double>& bin_edges_us
 ) const {
-    double template_start_time_us = pulse_time_us + start_offset_us_;
+    double template_start_time_us = pulse_time_us;
 
     if (bin_edges_us.size() < 2) {
         return std::vector<double>();
