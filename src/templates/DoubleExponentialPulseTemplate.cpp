@@ -31,7 +31,7 @@ std::vector<double> build_double_exp(
     double total = 0.0;
 
     for (int i = 0; i < n_bins; ++i) {
-        double t_us = i * native_bin_width_us + start_offset_us;
+        double t_us = i * native_bin_width_us;
         double value = fast_amplitude * std::exp(-fast_rate * t_us) + slow_amplitude * std::exp(-slow_rate * t_us);
         pmf[i] = value;
         total += value;
