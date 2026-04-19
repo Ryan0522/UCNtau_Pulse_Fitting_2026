@@ -1,6 +1,4 @@
 #include "ucn/app/BatchAnalysisRunner.hpp"
-
-#include "ucn/app/AnalysisPipeline.hpp"
 #include "ucn/app/WindowedPulseProcessor.hpp"
 #include "ucn/inference/GreedyLRTFitter.hpp"
 #include "ucn/io/RootRunLoader.hpp"
@@ -113,7 +111,6 @@ void BatchAnalysisRunner::run() const {
 
     GreedyLRTFitter fitter(pulse_template);
     WindowedPulseProcessor processor(pulse_template, fitter);
-    AnalysisPipeline pipeline(processor);
 
     for (int run = cfg_.start_run; run <= cfg_.end_run; ++run) {
         if (!run_is_allowed(cfg_, run)) {
@@ -132,7 +129,7 @@ void BatchAnalysisRunner::run() const {
                     continue;
                 }
 
-                RegionResult result = pipeline.run(
+                RegionResult result = processor.run(
                     seg.hits,
                     window.signal_start_us,
                     window.signal_end_us,

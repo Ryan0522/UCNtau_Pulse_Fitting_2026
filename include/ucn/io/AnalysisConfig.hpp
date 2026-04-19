@@ -10,11 +10,13 @@ namespace ucn::io {
 using json = nlohmann::json;
 
 struct PulseTemplateConfig {
-    double native_bin_width_us = 0.25;
-    double pulse_start_offset_us = 5.0;
-    double rise_us = 0.8;
-    double fast_decay_us = 8.0;
-    double slow_decay_us = 60.0;
+    double native_bin_width_us = 0.5;
+    double support_end_us = 100.0;
+    double fast_amplitude = 0.04136345;
+    double fast_rate = 1.5729156;
+    double slow_amplitude = 0.12074081;
+    double slow_rate = 1.54832358;
+    double start_offset_us = 4.5;
 };
 
 struct RunWindow {

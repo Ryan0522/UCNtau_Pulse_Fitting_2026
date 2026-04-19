@@ -14,7 +14,7 @@ public:
     FitResult fit(
         const Histogram& histogram,
         std::span<const double> coincidence_times_us,
-        const FitSetting& settings
+        const FitSettings& settings
     ) const;
 
 private:
