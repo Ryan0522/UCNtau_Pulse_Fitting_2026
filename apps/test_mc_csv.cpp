@@ -1,0 +1,81 @@
+#include "ucn/app/WindowedPulseProcessor.hpp"
+#include "ucn/inference/GreedyLRTFitter.hpp"
+#include "ucn/templates/DoubleExponentialPulseTemplate.hpp"
+#include "ucn/io/AnalysisConfig.hpp"
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+
+std::vector<ucn::Hit> load_mc_hits(const std::string& path) {
+    std::vector<ucn::Hit> hits;
+    std::ifstream file(path);
+    std::string line;
+    // skip header (Header)
+    std::getline(file, line); 
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string t_str, c_str;
+        if (std::getline(ss, t_str, ',') && std::getline(ss, c_str, ',')) {
+            ucn::Hit h;
+            h.time_us = std::stod(t_str);
+            h.channel = std::stoi(c_str);
+            hits.push_back(h);
+        }
+    }
+    return hits;
+}
+
+int main(int argc, char** argv) {
+    if (argc < 3) {
+        std::cerr << "Usage: test_mc_csv <config.json> <input_hits.csv>\n";
+        return 1;
+    }
+
+    try {
+        ucn::io::AnalysisConfig cfg = ucn::io::load_analysis_config(argv[1]);
+        
+        ucn::DoubleExponentialPulseTemplate pulse_template(
+            cfg.template_config.native_bin_width_us,
+            cfg.template_config.support_end_us,
+            cfg.template_config.fast_amplitude,
+            cfg.template_config.fast_rate,
+            cfg.template_config.slow_amplitude,
+            cfg.template_config.slow_rate,
+            0.0 // no offset
+        );
+
+        ucn::GreedyLRTFitter fitter(pulse_template);
+        ucn::WindowedPulseProcessor processor(pulse_template, fitter);
+
+        // 3. load MC data
+        std::vector<ucn::Hit> hits = load_mc_hits(argv[2]);
+        std::cout << "Loaded " << hits.size() << " hits from MC CSV.\n";
+
+        // 4. analyze
+        // time from 0 to 1000s 
+        ucn::RegionResult result = processor.analyze(
+            hits, 
+            0.0, 10.0 * 1e6,  // Signal Window
+            -1.0,               // Disable background fit if not needed
+            cfg.region_settings,
+            cfg.fit_settings
+        );
+
+        std::cout << "Analysis complete. Found " << result.signal_pulses.size() << " signal pulses.\n";
+
+        // 5. output for Python test (all_pulses.csv format)
+        std::ofstream out("test/mc_test_output.csv");
+        out << "time_us,amplitude_pe,is_pileup\n";
+        for (const auto& p : result.signal_pulses) {
+            out << p.time_us << "," << p.amplitude_pe << "," << (p.is_pileup ? 1 : 0) << "\n";
+        }
+        
+        std::cout << "Found " << result.signal_pulses.size() << " pulses. Output saved.\n";
+
+    } catch (const std::exception& e) {
+        std::cerr << "Error: " << e.what() << "\n";
+        return 2;
+    }
+    return 0;
+}

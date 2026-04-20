@@ -11,7 +11,6 @@ include(FetchContent)
 FetchContent_Declare(
     json
     URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.tar.xz
-    # 3. 顯式指定下載解壓設定，避免 CMake 警告
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE 
 )
 FetchContent_MakeAvailable(json)
@@ -66,8 +65,10 @@ endif()
 add_executable(run_batch_analysis
     apps/run_batch_analysis.cpp
 )
+add_executable(test_mc_csv apps/test_mc_csv.cpp)
 
 target_link_libraries(run_batch_analysis PRIVATE ucn_core)
+target_link_libraries(test_mc_csv PRIVATE ucn_core)
 
 # --- Testing Target ---
 if(UCN_BUILD_TESTS)

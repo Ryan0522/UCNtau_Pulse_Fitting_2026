@@ -144,23 +144,12 @@ RunWindow resolve_run_window(const AnalysisConfig& cfg, int run_number) {
         return window;
     }
 
-    window.signal_start_us = maybe_convert_to_us(
-        pick_number_with_fallback(*rec,
-            {"signal_start_us", "signal_start", "count_start_us", "unload_start_us"},
-            window.signal_start_us),
-        cfg.runinfo_times_in_seconds);
-
-    window.signal_end_us = maybe_convert_to_us(
-        pick_number_with_fallback(*rec,
-            {"signal_end_us", "signal_end", "count_end_us", "unload_end_us"},
-            window.signal_end_us),
-        cfg.runinfo_times_in_seconds);
-
-    window.background_start_us = maybe_convert_to_us(
-        pick_number_with_fallback(*rec,
-            {"background_start_us", "background_start", "bkg_start_us"},
-            window.background_start_us),
-        cfg.runinfo_times_in_seconds);
+    double start = pick_number_with_fallback(*rec, {"fill_time"}, 0) + 
+               pick_number_with_fallback(*rec, {"clean_time"}, 0) + 
+               pick_number_with_fallback(*rec, {"hold_time"}, 0);
+    window.signal_start_us = start * 1.0e6;
+    window.signal_end_us = (start + 300) * 1.0e6;
+    window.background_start_us = std::max(0.0, (start - 60) * 1.0e6);
 
     return window;
 }
