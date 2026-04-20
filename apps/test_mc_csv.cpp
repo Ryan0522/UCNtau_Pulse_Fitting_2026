@@ -3,6 +3,7 @@
 #include "ucn/templates/DoubleExponentialPulseTemplate.hpp"
 #include "ucn/io/AnalysisConfig.hpp"
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <vector>
@@ -53,11 +54,13 @@ int main(int argc, char** argv) {
         std::cout << "Loaded " << hits.size() << " hits from MC CSV.\n";
 
         // 4. analyze
-        // time from 0 to 1000s 
+        double signal_start = 10 * 1e6;
+        double signal_end = 20 * 1e6;
+        double bg_start = 0.0;
         ucn::RegionResult result = processor.analyze(
             hits, 
-            0.0, 10.0 * 1e6,  // Signal Window
-            -1.0,               // Disable background fit if not needed
+            signal_start, signal_end,  // Signal Window
+            bg_start,               // Disable background fit if not needed
             cfg.region_settings,
             cfg.fit_settings
         );
@@ -66,6 +69,7 @@ int main(int argc, char** argv) {
 
         // 5. output for Python test (all_pulses.csv format)
         std::ofstream out("test/mc_test_output.csv");
+        out << std::fixed << std::setprecision(3);
         out << "time_us,amplitude_pe,is_pileup\n";
         for (const auto& p : result.signal_pulses) {
             out << p.time_us << "," << p.amplitude_pe << "," << (p.is_pileup ? 1 : 0) << "\n";

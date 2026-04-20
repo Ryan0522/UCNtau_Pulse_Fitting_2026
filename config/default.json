@@ -35,17 +35,17 @@
     "coincidence_window_us": 0.1,
     "coincidence_min_hits": 2,
     "seed_veto_window_us": 2.0,
-    "background_duration_us": 60000000.0,
+    "background_duration_us": 10000000.0,
     "background_iterations": 10,
     "background_tolerance_fraction": 0.01,
-    "enable_background_fit": false,
+    "enable_background_fit": true,
     "debug": false
   },
 
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 5.0,
+    "delta_nll_cut": 3.0,
     "min_spacing_us": 2.0,
     "min_amplitude_pe": 5.0,
     "max_amplitude_pe": 300.0,
