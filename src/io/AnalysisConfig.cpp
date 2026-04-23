@@ -94,16 +94,17 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<double>(t, "native_bin_width_us", cfg.template_config.native_bin_width_us);
         cfg.template_config.support_end_us =
             get_or<double>(t, "support_end_us", cfg.template_config.support_end_us);
-        cfg.template_config.fast_amplitude =
-            get_or<double>(t, "fast_amplitude", cfg.template_config.fast_amplitude);
-        cfg.template_config.fast_rate =
-            get_or<double>(t, "fast_rate", cfg.template_config.fast_rate);
-        cfg.template_config.slow_amplitude =
-            get_or<double>(t, "slow_amplitude", cfg.template_config.slow_amplitude);
-        cfg.template_config.slow_rate =
-            get_or<double>(t, "slow_rate", cfg.template_config.slow_rate);
-        cfg.template_config.start_offset_us =
-            get_or<double>(t, "start_offset_us", cfg.template_config.start_offset_us);        
+        cfg.template_config.baseline = get_or<double>(t, "baseline", 0.0);
+        cfg.template_config.gauss_amp = get_or<double>(t, "gauss_amp", 0.0);
+        cfg.template_config.gauss_mu = get_or<double>(t, "gauss_mu", 0.0);
+        cfg.template_config.gauss_sigma = get_or<double>(t, "gauss_sigma", 0.0);
+        cfg.template_config.tail_start_us = get_or<double>(t, "tail_start_us", 0.0);
+        cfg.template_config.a1 = get_or<double>(t, "a1", 0.0);
+        cfg.template_config.tau1 = get_or<double>(t, "tau1", 0.0);
+        cfg.template_config.a2 = get_or<double>(t, "a2", 0.0);
+        cfg.template_config.tau2 = get_or<double>(t, "tau2", 0.0);
+        cfg.template_config.a3 = get_or<double>(t, "a3", 0.0);
+        cfg.template_config.tau3 = get_or<double>(t, "tau3", 0.0);
     }
 
     if (j.contains("region_settings")) {

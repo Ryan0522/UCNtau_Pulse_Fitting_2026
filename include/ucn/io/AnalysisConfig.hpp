@@ -12,11 +12,19 @@ using json = nlohmann::json;
 struct PulseTemplateConfig {
     double native_bin_width_us = 0.5;
     double support_end_us = 100.0;
-    double fast_amplitude = 0.04136345;
-    double fast_rate = 1.5729156;
-    double slow_amplitude = 0.12074081;
-    double slow_rate = 1.54832358;
-    double start_offset_us = 0.0;
+
+    // Triple Exponential / GaussianTrip Parameters
+    double baseline = 0.0;
+    double gauss_amp = 0.0;
+    double gauss_mu = 0.0;
+    double gauss_sigma = 0.0;
+    double tail_start_us = 0.0;
+    double a1 = 0.0;
+    double tau1 = 0.0;
+    double a2 = 0.0;
+    double tau2 = 0.0;
+    double a3 = 0.0;
+    double tau3 = 0.0;
 };
 
 struct RunWindow {

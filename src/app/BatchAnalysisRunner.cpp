@@ -2,7 +2,7 @@
 #include "ucn/app/WindowedPulseProcessor.hpp"
 #include "ucn/inference/GreedyLRTFitter.hpp"
 #include "ucn/io/RootRunLoader.hpp"
-#include "ucn/templates/DoubleExponentialPulseTemplate.hpp"
+#include "ucn/templates/GaussianTripPulseTemplate.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -107,14 +107,17 @@ void BatchAnalysisRunner::run() const {
     write_pulse_header(pulses_out);
     write_window_header(windows_out);
 
-    DoubleExponentialPulseTemplate pulse_template(
+    GaussianTripPulseTemplate pulse_template(
         cfg_.template_config.native_bin_width_us,
         cfg_.template_config.support_end_us,
-        cfg_.template_config.fast_amplitude,
-        cfg_.template_config.fast_rate,
-        cfg_.template_config.slow_amplitude,
-        cfg_.template_config.slow_rate,
-        cfg_.template_config.start_offset_us
+        cfg_.template_config.baseline,
+        cfg_.template_config.gauss_amp,
+        cfg_.template_config.gauss_mu,
+        cfg_.template_config.gauss_sigma,
+        cfg_.template_config.tail_start_us,
+        cfg_.template_config.a1, cfg_.template_config.tau1,
+        cfg_.template_config.a2, cfg_.template_config.tau2,
+        cfg_.template_config.a3, cfg_.template_config.tau3
     );
 
     GreedyLRTFitter fitter(pulse_template);

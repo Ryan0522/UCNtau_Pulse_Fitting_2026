@@ -1,6 +1,6 @@
 #include "ucn/app/WindowedPulseProcessor.hpp"
 #include "ucn/inference/GreedyLRTFitter.hpp"
-#include "ucn/templates/DoubleExponentialPulseTemplate.hpp"
+#include "ucn/templates/GaussianTripPulseTemplate.hpp"
 #include "ucn/io/AnalysisConfig.hpp"
 #include <iostream>
 #include <iomanip>
@@ -36,23 +36,26 @@ int main(int argc, char** argv) {
     try {
         ucn::io::AnalysisConfig cfg = ucn::io::load_analysis_config(argv[1]);
         
-        ucn::DoubleExponentialPulseTemplate pulse_template(
+        ucn::GaussianTripPulseTemplate pulse_template(
             cfg.template_config.native_bin_width_us,
             cfg.template_config.support_end_us,
-            cfg.template_config.fast_amplitude,
-            cfg.template_config.fast_rate,
-            cfg.template_config.slow_amplitude,
-            cfg.template_config.slow_rate,
-            0.0 // no offset
+            cfg.template_config.baseline,
+            cfg.template_config.gauss_amp,
+            cfg.template_config.gauss_mu,
+            cfg.template_config.gauss_sigma,
+            cfg.template_config.tail_start_us,
+            cfg.template_config.a1, cfg.template_config.tau1,
+            cfg.template_config.a2, cfg.template_config.tau2,
+            cfg.template_config.a3, cfg.template_config.tau3
         );
 
         ucn::GreedyLRTFitter fitter(pulse_template);
         ucn::WindowedPulseProcessor processor(pulse_template, fitter);
         
         // debug
-        bool debug = false;
+        bool debug = true;
         if (debug) {
-            processor.set_debug_max_windows(4);
+            processor.set_debug_max_windows(13);
             cfg.region_settings.debug = true;
             cfg.fit_settings.debug = true;
         } else {

@@ -21,11 +21,17 @@
   "template_config": {
     "native_bin_width_us": 0.5,
     "support_end_us": 100.0,
-    "fast_amplitude": 0.21137227,
-    "fast_rate": 3.12595994,
-    "slow_amplitude": 0.04527244,
-    "slow_rate": 0.16946228,
-    "start_offset_us": 0
+    "baseline": 2.35574699e-04,
+    "gauss_amp": 2.64853519e-01,
+    "gauss_mu": 0.0,
+    "gauss_sigma": 0.182163026,
+    "tail_start_us": 0.0,
+    "a1": 2.96819526e-02, 
+    "tau1": 5.0,
+    "a2": 5.49622939e-02, 
+    "tau2": 1.14242898,
+    "a3": 5.19776557e-03, 
+    "tau3": 29.3893616
   },
 
   "region_settings": {
@@ -48,7 +54,7 @@
     "delta_nll_cut": 10.0,
     "min_spacing_us": 2.0,
     "min_amplitude_pe": 10.0,
-    "max_amplitude_pe": 300.0,
+    "max_amplitude_pe": 1000.0,
     "background_per_bin": 0.0,
     "cluster_gap_us": 1.0,
     "max_coordinate_descent_steps": 20,
