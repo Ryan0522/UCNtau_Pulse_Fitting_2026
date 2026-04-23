@@ -1,0 +1,47 @@
+#pragma once
+#include "ucn/templates/PulseTemplates.hpp"
+#include <cmath>
+#include <vector>
+
+namespace ucn
+{
+
+class GaussianTripPulseTemplate : public PulseTemplate {
+public:
+    GaussianTripPulseTemplate(
+        double native_bin_width_us,
+        double support_end_us,
+        double baseline,
+        double gauss_amp, double gauss_mu, double gauss_sigma,
+        double tail_start_us,
+        double a1, double tau1,
+        double a2, double tau2,
+        double a3, double tau3
+    );
+
+    double native_bin_width_us() const override { return native_bin_width_us_; }
+    std::vector<double> pmf() const override { return pmf_unit_; }
+    
+    double integral(double t0_us, double t1_us) const override;
+
+    std::vector<double> shifted_to_histogram(
+        double pulse_time_us,
+        const std::vector<double>& bin_edges_us
+    ) const override;
+
+private:
+    double native_bin_width_us_;
+    double support_end_us_;
+
+    double c_, Ag_, mu_g_, sigma_g_;
+    double t0_;
+    double A1_, tau1_, A2_, tau2_, A3_, tau3_;
+    
+    double normalization_factor_ = 1.0;
+    std::vector<double> pmf_unit_;
+
+    double shape_unnormalized(double t_us) const;
+    double analytic_integral(double t_us) const;
+};
+    
+} // namespace ucn

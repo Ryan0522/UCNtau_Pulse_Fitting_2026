@@ -14,6 +14,8 @@ public:
     WindowedPulseProcessor(const PulseTemplate& pulse_template,
                            const GreedyLRTFitter& fitter);
 
+    void set_debug_max_windows(int n);
+
     RegionResult analyze(const std::vector<Hit>& hits,
                          double signal_start_us,
                          double signal_end_us,
@@ -53,6 +55,7 @@ private:
 
     const PulseTemplate& pulse_template_;
     const GreedyLRTFitter& fitter_;
+    int debug_max_windows_ = -1;
 };
 
 } // namespace ucn

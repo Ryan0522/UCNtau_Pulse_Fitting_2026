@@ -4,6 +4,8 @@
 #include <cmath>
 #include <limits>
 #include <numeric>
+#include <iostream>
+#include <iomanip>
 
 namespace ucn {
 namespace {
@@ -27,6 +29,10 @@ WindowedPulseProcessor::WindowedPulseProcessor(const PulseTemplate& pulse_templa
                                                const GreedyLRTFitter& fitter)
     : pulse_template_(pulse_template),
       fitter_(fitter) {
+}
+
+void WindowedPulseProcessor::set_debug_max_windows(int n) {
+    debug_max_windows_ = n;
 }
 
 std::vector<Hit> WindowedPulseProcessor::select_hits(const std::vector<Hit>& hits,
@@ -190,11 +196,22 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
 
     int i = 0;
     int window_index = 0;
+    int debug_window_count = 0;
     while (i < static_cast<int>(hits.size())) {
+        if (debug_max_windows_ >= 0 && debug_window_count >= debug_max_windows_) {
+            if (region_settings.debug) {
+                std::cerr << std::fixed << std::setprecision(3);
+                std::cerr << "[STOP] Reached debug_max_windows_ = "
+                        << debug_max_windows_ << "\n";
+            }
+            break;
+        }
+
         Histogram coarse_histogram;
         double start_time_us = 0.0;
         double end_time_us = 0.0;
         int next_index = i;
+
         bool ok = build_window_histogram(hits,
                                          i,
                                          region_settings.coarse_bin_width_us,
@@ -243,6 +260,37 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
             continue;
         }
 
+        if (region_settings.debug) {
+            debug_window_count++;
+            std::cerr << std::fixed << std::setprecision(3);
+            std::cerr << "\n========== [WINDOW " << window_index << "] ==========\n";
+            std::cerr << "[WINDOW] start_time_us=" << start_time_us
+                    << " end_time_us=" << end_time_us
+                    << " width_us=" << (end_time_us - start_time_us)
+                    << " next_index=" << next_index
+                    << " uses_fine_bins=" << uses_fine_bins
+                    << " bin_width_us=" << bin_width_us
+                    << "\n";
+
+            std::cerr << "[WINDOW-EDGES] bin_edges_us =";
+            for (double x : histogram.bin_edges_us) std::cerr << " " << x;
+            std::cerr << "\n";
+
+            std::cerr << "[WINDOW-HIST] counts =";
+            for (double c : histogram.counts) std::cerr << " " << c;
+            std::cerr << "\n";
+
+            double carry_sum = std::accumulate(fixed_expected.begin(),
+                                            fixed_expected.end(), 0.0);
+            std::cerr << "[WINDOW-PRE-FIT] carry_sum=" << carry_sum
+                    << " n_seeds=" << seeds.size()
+                    << "\n";
+
+            std::cerr << "[WINDOW-SEEDS] seeds =";
+            for (double s : seeds) std::cerr << " " << s;
+            std::cerr << "\n";
+        }
+
         FitSettings window_fit_settings = fit_settings;
         window_fit_settings.background_per_bin = background_rate_hz * bin_width_us * 1.0e-6;
         window_fit_settings.fixed_expected = fixed_expected;
@@ -252,6 +300,20 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
             i = next_index;
             ++window_index;
             continue;
+        }
+
+        if (region_settings.debug) {
+            std::cerr << "[WINDOW-FIT-DONE] window_index=" << window_index
+                    << " n_pulses=" << fit.pulses.size()
+                    << " final_nll=" << fit.final_nll
+                    << "\n";
+
+            for (std::size_t k = 0; k < fit.pulses.size(); ++k) {
+                std::cerr << "  pulse[" << k << "]"
+                        << " t=" << fit.pulses[k].time_us
+                        << " a=" << fit.pulses[k].amplitude_pe
+                        << "\n";
+            }
         }
 
         std::vector<double> full_expected = fit.expected_total;

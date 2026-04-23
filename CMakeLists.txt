@@ -31,6 +31,7 @@ find_package(ROOT REQUIRED COMPONENTS Core RIO Tree)
 # --- Core Library Target ---
 add_library(ucn_core
     src/templates/DoubleExponentialPulseTemplate.cpp
+    src/templates/GaussianTripPulseTemplate.cpp
     src/inference/Likelihood.cpp
     src/inference/GreedyLRTFitter.cpp
     src/app/WindowedPulseProcessor.cpp
