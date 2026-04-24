@@ -412,7 +412,7 @@ RegionResult WindowedPulseProcessor::analyze(const std::vector<Hit>& hits,
                 fitted_pe_sum += pulse.amplitude_pe;
             }
 
-            const double duration_s = region_settings.background_duration_us * 1.0e-6;
+            const double duration_s = background_duration_us * 1.0e-6;
             
             double new_background_rate_hz = 0.0;
             if (duration_s > 0.0) {

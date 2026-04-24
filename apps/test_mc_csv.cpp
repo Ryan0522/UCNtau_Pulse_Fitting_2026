@@ -69,13 +69,25 @@ int main(int argc, char** argv) {
         std::cout << "Loaded " << hits.size() << " hits from MC CSV.\n";
 
         // 4. analyze
-        double signal_start = 10 * 1e6;
-        double signal_end = 31 * 1e6;
-        double bg_start = 0.0;
+        double start_us = 10.0 * 1e6;
+
+        double background_start = std::max(0.0, start_us - 60.0e6);
+        double background_end   = start_us;
+
+        double signal_start = start_us;
+        double signal_end   = start_us + 60.0e6;
+
+        double end_start = start_us + 0.0e6;
+        double end_end   = start_us + 0.0e6;
+
         ucn::RegionResult result = processor.analyze(
-            hits, 
-            signal_start, signal_end,  // Signal Window
-            bg_start,               // Disable background fit if not needed
+            hits,
+            background_start,
+            background_end,
+            signal_start,
+            signal_end,
+            end_start,
+            end_end,
             cfg.region_settings,
             cfg.fit_settings
         );
@@ -98,7 +110,7 @@ int main(int argc, char** argv) {
         std::ofstream win_out(window_file);
         win_out << std::fixed << std::setprecision(3);
         win_out << "window_index,final_nll,seed_count,pulse_count,observed_count,expected_count\n";
-        for (const auto& w : result.window_summaries) {
+        for (const auto& w : result.signal_window_summaries) {
             win_out << w.window_index << "," << w.final_nll << "," << w.seed_count << "," 
                     << w.pulse_count << "," << w.observed_count << "," << w.expected_count << "\n";
         }

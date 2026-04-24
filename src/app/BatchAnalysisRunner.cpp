@@ -110,45 +110,56 @@ void write_summary_header(std::ofstream& out) {
 }
 
 void write_pulse_header(std::ofstream& out) {
-    out << "run,segment,region,time_us,amplitude_pe,window_index,window_width_us,"
-       "is_pileup,uses_fine_bins,background_rate_hz\n";
+    out << "run,segment,hold_time_s,region,time_us,amplitude_pe,"
+           "window_index,window_width_us,is_pileup,uses_fine_bins,"
+           "background_rate_hz\n";
 }
 
 void write_window_header(std::ofstream& out) {
-    out << "run,segment,window_index,start_time_us,end_time_us,bin_width_us,"
-           "pulse_count,observed_count,expected_count,final_nll\n";
+    out << "run,segment,hold_time_s,region,window_index,"
+           "start_time_us,end_time_us,bin_width_us,"
+           "pulse_count,seed_count,observed_count,expected_count,final_nll\n";
 }
 
 void append_tagged_pulses(std::ofstream& out,
                           const std::string& run_id,
                           const std::string& segment,
+                          double hold_time_s,
                           const std::string& region_name,
-                          const std::vector<TaggedPulse>& pulses) {
+                          const std::vector<TaggedPulse>& pulses,
+                          double background_rate_hz) {
     for (const TaggedPulse& p : pulses) {
         out << run_id << ','
             << segment << ','
+            << std::setprecision(17) << hold_time_s << ','
             << region_name << ','
-            << std::setprecision(17) << p.time_us << ','
+            << p.time_us << ','
             << p.amplitude_pe << ','
             << p.window_index << ','
             << p.window_width_us << ','
             << (p.is_pileup ? 1 : 0) << ','
-            << (p.uses_fine_bins ? 1 : 0) << '\n';
+            << (p.uses_fine_bins ? 1 : 0) << ','
+            << background_rate_hz << '\n';
     }
 }
 
 void append_window_rows(std::ofstream& out,
                         const std::string& run_id,
                         const std::string& segment,
+                        double hold_time_s,
+                        const std::string& region_name,
                         const std::vector<WindowSummary>& windows) {
     for (const WindowSummary& w : windows) {
         out << run_id << ','
             << segment << ','
+            << std::setprecision(17) << hold_time_s << ','
+            << region_name << ','
             << w.window_index << ','
-            << std::setprecision(17) << w.start_time_us << ','
+            << w.start_time_us << ','
             << w.end_time_us << ','
             << w.bin_width_us << ','
             << w.pulse_count << ','
+            << w.seed_count << ','
             << w.observed_count << ','
             << w.expected_count << ','
             << w.final_nll << '\n';
@@ -225,7 +236,7 @@ void BatchAnalysisRunner::run() const {
     int n_runs_processed = 0;
     int n_runs_failed = 0;
 
-    for (int run = cfg_.start_run; run <= cfg_.end_run; ++run) {
+    for (int run : my_runs) {
         try {
             const io::LoadedRun loaded = io::load_root_run(cfg_, run);
             const io::RunWindow window = io::resolve_run_window(cfg_, run);
@@ -279,6 +290,36 @@ void BatchAnalysisRunner::run() const {
                             << result.signal_window_summaries.size() << ','
                             << result.end_window_summaries.size() << ','
                             << result.background_rate_hz << '\n';
+
+                append_tagged_pulses(
+                    pulses_out,
+                    loaded.run_id,
+                    seg.segment_name,
+                    hold_time_s,
+                    "background",
+                    result.background_pulses,
+                    result.background_rate_hz
+                );
+
+                append_tagged_pulses(
+                    pulses_out,
+                    loaded.run_id,
+                    seg.segment_name,
+                    hold_time_s,
+                    "signal",
+                    result.signal_pulses,
+                    result.background_rate_hz
+                );
+
+                append_tagged_pulses(
+                    pulses_out,
+                    loaded.run_id,
+                    seg.segment_name,
+                    hold_time_s,
+                    "end",
+                    result.end_pulses,
+                    result.background_rate_hz
+                );
 
                 append_window_rows(
                     windows_out,
