@@ -78,6 +78,9 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
     cfg.use_runinfo_windows = get_or<bool>(j, "use_runinfo_windows", cfg.use_runinfo_windows);
     cfg.runinfo_times_in_seconds = get_or<bool>(j, "runinfo_times_in_seconds", cfg.runinfo_times_in_seconds);
 
+    cfg.shard_index = get_or<int>(j, "shard_index", cfg.shard_index);
+    cfg.num_shards = get_or<int>(j, "num_shards", cfg.num_shards);
+
     if (j.contains("default_window")) {
         const json& w = j.at("default_window");
         cfg.default_window.signal_start_us =

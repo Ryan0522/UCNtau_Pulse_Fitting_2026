@@ -50,7 +50,12 @@ struct RegionSettings {
 struct RegionResult {
     std::vector<TaggedPulse> signal_pulses;
     std::vector<TaggedPulse> background_pulses;
-    std::vector<WindowSummary> window_summaries;
+    std::vector<TaggedPulse> end_pulses;
+
+    std::vector<WindowSummary> background_window_summaries;
+    std::vector<WindowSummary> signal_window_summaries;
+    std::vector<WindowSummary> end_window_summaries;
+    
     double background_rate_hz = 0.0;
 };
 

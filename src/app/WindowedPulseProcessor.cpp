@@ -370,27 +370,33 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
 }
 
 RegionResult WindowedPulseProcessor::analyze(const std::vector<Hit>& hits,
+                                             double background_start_us,
+                                             double background_end_us,
                                              double signal_start_us,
                                              double signal_end_us,
-                                             double background_start_us,
+                                             double end_start_us,
+                                             double end_end_us,
                                              const RegionSettings& region_settings,
                                              const FitSettings& fit_settings) const {
     RegionResult result;
 
-    std::vector<Hit> signal_hits = select_hits(hits, signal_start_us, signal_end_us);
+    const double background_duration_us =
+        std::max(0.0, background_end_us - background_start_us);
+
     std::vector<Hit> background_hits;
-    if (region_settings.enable_background_fit) {
-        background_hits = select_hits(hits,
-                                      background_start_us,
-                                      background_start_us + region_settings.background_duration_us);
+    if (region_settings.enable_background_fit && background_duration_us > 0.0) {
+        background_hits = select_hits(hits, background_start_us, background_end_us);
     }
+
+    std::vector<Hit> signal_hits = select_hits(hits, signal_start_us, signal_end_us);
+    std::vector<Hit> end_hits = select_hits(hits, end_start_us, end_end_us);
 
     double background_rate_hz = 0.0;
-    if (!background_hits.empty() && region_settings.background_duration_us > 0.0) {
-        background_rate_hz = static_cast<double>(background_hits.size()) / (region_settings.background_duration_us * 1.0e-6);
+    if (!background_hits.empty() && background_duration_us > 0.0) {
+        background_rate_hz = static_cast<double>(background_hits.size()) / (background_duration_us * 1.0e-6);
     }
 
-    if (region_settings.enable_background_fit) {
+    if (region_settings.enable_background_fit && background_duration_us > 0.0) {
         for (int iter = 0; iter < region_settings.background_iterations; ++iter) {
             std::vector<TaggedPulse> background_pulses;
             std::vector<WindowSummary> background_summaries;
@@ -406,7 +412,8 @@ RegionResult WindowedPulseProcessor::analyze(const std::vector<Hit>& hits,
                 fitted_pe_sum += pulse.amplitude_pe;
             }
 
-            double duration_s = region_settings.background_duration_us * 1.0e-6;
+            const double duration_s = region_settings.background_duration_us * 1.0e-6;
+            
             double new_background_rate_hz = 0.0;
             if (duration_s > 0.0) {
                 new_background_rate_hz = std::max(0.0, (static_cast<double>(background_hits.size()) - fitted_pe_sum) / duration_s);
@@ -414,8 +421,12 @@ RegionResult WindowedPulseProcessor::analyze(const std::vector<Hit>& hits,
 
             double delta = std::abs(new_background_rate_hz - background_rate_hz);
             double tolerance = region_settings.background_tolerance_fraction * std::max(1.0, background_rate_hz);
+            
             background_rate_hz = new_background_rate_hz;
-            result.background_pulses = background_pulses;
+            
+            result.background_pulses = std::move(background_pulses);
+            result.background_window_summaries = std::move(background_summaries);
+
             if (delta < tolerance) {
                 break;
             }
@@ -427,7 +438,14 @@ RegionResult WindowedPulseProcessor::analyze(const std::vector<Hit>& hits,
                fit_settings,
                background_rate_hz,
                result.signal_pulses,
-               result.window_summaries);
+               result.signal_window_summaries);
+
+    fit_stream(end_hits,
+               region_settings,
+               fit_settings,
+               background_rate_hz,
+               result.end_pulses,
+               result.end_window_summaries);
 
     result.background_rate_hz = background_rate_hz;
     return result;

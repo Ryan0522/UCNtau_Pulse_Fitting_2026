@@ -18,6 +18,9 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
+  "shard_index": 0,
+  "num_shards": 1,
+
   "template_config": {
     "native_bin_width_us": 0.5,
     "support_end_us": 100.0,

@@ -28,9 +28,16 @@ struct PulseTemplateConfig {
 };
 
 struct RunWindow {
+    double start_us = 0.0;
+
+    double background_start_us = 0.0;
+    double background_end_us = 0.0;
+
     double signal_start_us = 0.0;
     double signal_end_us = 60.0e6;
-    double background_start_us = 70.0e6;
+
+    double end_start_us = 120.0e6;
+    double end_end_us = 180.0e6;
 };
 
 struct AnalysisConfig {
@@ -66,6 +73,10 @@ struct AnalysisConfig {
     // Optional loaded metadata
     json runinfo_json = json::object();
     std::set<std::string> good_runs;
+
+    // Slurm-array / sharding
+    int shard_index = 0;
+    int num_shards = 1;
 };
 
 AnalysisConfig load_analysis_config(const std::string& config_path);

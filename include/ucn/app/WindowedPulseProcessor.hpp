@@ -17,9 +17,12 @@ public:
     void set_debug_max_windows(int n);
 
     RegionResult analyze(const std::vector<Hit>& hits,
+                         double background_start_us,
+                         double background_end_us,
                          double signal_start_us,
                          double signal_end_us,
-                         double background_start_us,
+                         double end_start_us,
+                         double end_end_us,
                          const RegionSettings& region_settings,
                          const FitSettings& fit_settings) const;
 
