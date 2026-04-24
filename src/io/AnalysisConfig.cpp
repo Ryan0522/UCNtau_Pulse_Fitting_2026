@@ -115,6 +115,8 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<double>(r, "fine_bin_width_us", cfg.region_settings.fine_bin_width_us);
         cfg.region_settings.min_gap_us =
             get_or<double>(r, "min_gap_us", cfg.region_settings.min_gap_us);
+        cfg.region_settings.fit_end_padding_us =
+            get_or<double>(r, "fit_end_padding_us", cfg.region_settings.fit_end_padding_us);
         cfg.region_settings.coincidence_window_us =
             get_or<double>(r, "coincidence_window_us", cfg.region_settings.coincidence_window_us);
         cfg.region_settings.coincidence_min_hits =

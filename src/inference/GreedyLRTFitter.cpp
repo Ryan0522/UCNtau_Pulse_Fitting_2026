@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <iomanip>
 #include <string>
+#include <numeric>
 
 namespace ucn
 {

@@ -28,8 +28,8 @@ std::vector<ucn::Hit> load_mc_hits(const std::string& path) {
 }
 
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        std::cerr << "Usage: test_mc_csv <config.json> <input_hits.csv>\n";
+    if (argc < 4) {
+        std::cerr << "Usage: test_mc_csv <config.json> <input_hits.csv> <output postfix (12, 34, etc.)>\n";
         return 1;
     }
 
@@ -53,9 +53,9 @@ int main(int argc, char** argv) {
         ucn::WindowedPulseProcessor processor(pulse_template, fitter);
         
         // debug
-        bool debug = true;
+        bool debug = false;
         if (debug) {
-            processor.set_debug_max_windows(13);
+            processor.set_debug_max_windows(3);
             cfg.region_settings.debug = true;
             cfg.fit_settings.debug = true;
         } else {
@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
 
         // 4. analyze
         double signal_start = 10 * 1e6;
-        double signal_end = 20 * 1e6;
+        double signal_end = 31 * 1e6;
         double bg_start = 0.0;
         ucn::RegionResult result = processor.analyze(
             hits, 
@@ -83,15 +83,30 @@ int main(int argc, char** argv) {
         std::cout << "Analysis complete. Found " << result.signal_pulses.size() << " signal pulses.\n";
 
         // 5. output for Python test (all_pulses.csv format)
-        std::ofstream out("test/mc_test_output.csv");
-        out << std::fixed << std::setprecision(3);
-        out << "time_us,amplitude_pe,is_pileup\n";
-        for (const auto& p : result.signal_pulses) {
-            out << p.time_us << "," << p.amplitude_pe << "," << (p.is_pileup ? 1 : 0) << "\n";
-        }
+        std::string postfix = argv[3];
+        std::string pulse_file = "test/fit_results_seg" + postfix + ".csv";
+        std::string window_file = "test/win_summaries_seg" + postfix + ".csv";
         
-        std::cout << "Found " << result.signal_pulses.size() << " pulses. Output saved.\n";
+        std::ofstream out(pulse_file);
+        out << std::fixed << std::setprecision(3);
+        out << "time_us,amplitude_pe,is_pileup, window_index\n";
+        for (const auto& p : result.signal_pulses) {
+            out << p.time_us << "," << p.amplitude_pe << "," 
+                << (p.is_pileup ? 1 : 0) << "," << p.window_index << "\n";
+        }
 
+        std::ofstream win_out(window_file);
+        win_out << std::fixed << std::setprecision(3);
+        win_out << "window_index,final_nll,seed_count,pulse_count,observed_count,expected_count\n";
+        for (const auto& w : result.window_summaries) {
+            win_out << w.window_index << "," << w.final_nll << "," << w.seed_count << "," 
+                    << w.pulse_count << "," << w.observed_count << "," << w.expected_count << "\n";
+        }
+
+        std::cout << "Found " << result.signal_pulses.size() << " pulses. Output saved.\n";
+        std::cout << "Saved pulses to: " << pulse_file << "\n";
+        std::cout << "Saved window summaries to: " << window_file << "\n";
+        
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
         return 2;
