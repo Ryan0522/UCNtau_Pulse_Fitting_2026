@@ -1,5 +1,7 @@
 build/
 output/
+logs/
+*.sh
 *.o
 *.obj
 *.exe

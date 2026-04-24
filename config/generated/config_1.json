@@ -3,40 +3,34 @@
   "start_run": 26308,
   "end_run": 31513,
   "restrict_to_good_runs": true,
-
   "data_folder": "../UCNtau_2022_raw_data/",
   "output_folder": "./output/",
   "runinfo_path": "./config/betteroutput2022.json",
   "good_runs_path": "./config/2022runlist.txt",
-
   "root_filename_prefix": "processed_output_",
   "root_filename_suffix": ".root",
   "tmcs0_tree_name": "tmcs_0",
   "tmcs1_tree_name": "tmcs_1",
   "tems_tree_name": "tems",
-
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
-
-  "shard_index": 0,
-  "num_shards": 1,
-
+  "shard_index": 1,
+  "num_shards": 32,
   "template_config": {
     "native_bin_width_us": 0.5,
     "support_end_us": 100.0,
     "baseline": 0.0,
-    "gauss_amp": 2.64853519e-01,
+    "gauss_amp": 0.264853519,
     "gauss_mu": 0.0,
     "gauss_sigma": 0.182163026,
     "tail_start_us": 0.0,
-    "a1": 2.96819526e-02, 
+    "a1": 0.0296819526,
     "tau1": 5.0,
-    "a2": 5.49622939e-02, 
+    "a2": 0.0549622939,
     "tau2": 1.14242898,
-    "a3": 5.19776557e-03, 
+    "a3": 0.00519776557,
     "tau3": 29.3893616
   },
-
   "region_settings": {
     "coarse_bin_width_us": 0.5,
     "fine_bin_width_us": 0.25,
@@ -51,7 +45,6 @@
     "enable_background_fit": true,
     "debug": false
   },
-
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
