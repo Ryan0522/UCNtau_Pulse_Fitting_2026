@@ -91,7 +91,7 @@ fs::path make_output_dir(const io::AnalysisConfig& cfg) {
     fs::path out_dir = fs::path(cfg.output_folder);
 
     if (cfg.num_shards > 1) {
-        out_dir /= "array";
+        out_dir /= "array_25PE";
         out_dir /= shard_name(cfg.shard_index);
     }
 
