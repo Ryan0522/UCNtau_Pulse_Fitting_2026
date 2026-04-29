@@ -1,6 +1,7 @@
 #pragma once
 #include "ucn/data/FitTypes.hpp"
 #include "ucn/data/SignalTypes.hpp"
+#include "ucn/inference/CoincidenceFitter.hpp"
 #include <nlohmann/json.hpp>
 #include <set>
 #include <string>
@@ -75,8 +76,13 @@ struct AnalysisConfig {
     std::set<std::string> good_runs;
 
     // Slurm-array / sharding
+    std::string array_output_subdir = "";
     int shard_index = 0;
     int num_shards = 1;
+
+    // Coincidence Settings
+    bool enable_coincidence_output = true;
+    CoincidenceSettings coincidence_settings;
 };
 
 AnalysisConfig load_analysis_config(const std::string& config_path);

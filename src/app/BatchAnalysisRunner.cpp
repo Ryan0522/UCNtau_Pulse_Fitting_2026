@@ -1,6 +1,7 @@
 #include "ucn/app/BatchAnalysisRunner.hpp"
 #include "ucn/app/WindowedPulseProcessor.hpp"
 #include "ucn/inference/GreedyLRTFitter.hpp"
+#include "ucn/inference/CoincidenceFitter.hpp"
 #include "ucn/io/RootRunLoader.hpp"
 #include "ucn/templates/GaussianTripPulseTemplate.hpp"
 
@@ -13,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cmath>
 
 namespace fs = std::filesystem;
 
@@ -87,11 +89,31 @@ std::string shard_name(int shard_index) {
     return ss.str();
 }
 
+std::string make_array_subdir_name(const io::AnalysisConfig& cfg) {
+    if (!cfg.array_output_subdir.empty()) {
+        return cfg.array_output_subdir;
+    }
+
+    const double pe = cfg.fit_settings.min_amplitude_pe;
+    const double nll = cfg.fit_settings.delta_nll_cut;
+    const double wt = cfg.region_settings.min_gap_us;
+    const double wc = cfg.region_settings.coincidence_window_us;
+
+    std::ostringstream ss;
+    ss << "array"
+       << "_" << static_cast<int>(std::llround(pe)) << "PE"
+       << "_" << static_cast<int>(std::llround(nll)) << "nll"
+       << "_wc" << static_cast<int>(std::llround(wc * 1000)) << "ns"
+       << "_wt" << static_cast<int>(std::llround(wt)) << "us";
+
+    return ss.str();
+}
+
 fs::path make_output_dir(const io::AnalysisConfig& cfg) {
     fs::path out_dir = fs::path(cfg.output_folder);
 
     if (cfg.num_shards > 1) {
-        out_dir /= "array_25PE";
+        out_dir /= make_array_subdir_name(cfg);
         out_dir /= shard_name(cfg.shard_index);
     }
 
@@ -113,6 +135,13 @@ void write_pulse_header(std::ofstream& out) {
     out << "run,segment,hold_time_s,region,time_us,amplitude_pe,"
            "window_index,window_width_us,is_pileup,uses_fine_bins,"
            "background_rate_hz\n";
+}
+
+void write_coincidence_header(std::ofstream& out) {
+    out << "run,segment,hold_time_s,region, time_us, amplitude_pe,"
+           "start_time_us,end_time_us,length_us,"
+           "n_pe,n_pileup,free_pe_interval_us,"
+           "passes_raw_threshold,passes_pileup_threshold\n";
 }
 
 void write_window_header(std::ofstream& out) {
@@ -166,6 +195,48 @@ void append_window_rows(std::ofstream& out,
     }
 }
 
+std::string classify_region(double t_us, const ucn::io::RunWindow& w) {
+    if (t_us >= w.background_start_us && t_us < w.background_end_us) {
+        return "background";
+    }
+    if (t_us >= w.signal_start_us && t_us < w.signal_end_us) {
+        return "signal";
+    }
+    if (t_us >= w.end_start_us && t_us < w.end_end_us) {
+        return "end";
+    }
+    return "";
+}
+
+void append_coincidence_rows(std::ofstream& out,
+                             const std::string& run_id,
+                             const std::string& segment,
+                             double hold_time_s,
+                             const ucn::io::RunWindow& window,
+                             const std::vector<ucn::CoincidenceEvent>& events) {
+    for (const auto& ev : events) {
+        const std::string region = classify_region(ev.start_time_us, window);
+        if (region.empty()) {
+            continue;
+        }
+
+        out << run_id << ','
+            << segment << ','
+            << std::setprecision(17) << hold_time_s << ','
+            << region << ','
+            << ev.start_time_us << ','
+            << ev.n_pe << ','
+            << ev.start_time_us << ','
+            << ev.end_time_us << ','
+            << ev.length_us << ','
+            << ev.n_pe << ','
+            << ev.n_pileup << ','
+            << ev.free_pe_interval_us << ','
+            << (ev.passes_raw_threshold ? 1 : 0) << ','
+            << (ev.passes_pileup_threshold ? 1 : 0) << '\n';
+    }
+}
+
 } // namespace
 
 BatchAnalysisRunner::BatchAnalysisRunner(const io::AnalysisConfig& cfg)
@@ -181,10 +252,11 @@ void BatchAnalysisRunner::run() const {
         cfg_.num_shards
     );
 
-    const fs::path metadata_path = out_dir / "analysis_metadata.json";
-    const fs::path summary_path  = out_dir / "run_segment_summary.csv";
-    const fs::path pulses_path   = out_dir / "all_pulses.csv";
-    const fs::path windows_path  = out_dir / "all_windows.csv";
+    const fs::path metadata_path     = out_dir / "analysis_metadata.json";
+    const fs::path summary_path      = out_dir / "run_segment_summary.csv";
+    const fs::path pulses_path       = out_dir / "all_pulses.csv";
+    const fs::path windows_path      = out_dir / "all_windows.csv";
+    const fs::path coincidences_path = out_dir / "all_coincidences.csv";
 
     std::ofstream meta_out(metadata_path);
 
@@ -203,14 +275,16 @@ void BatchAnalysisRunner::run() const {
     std::ofstream summary_out(summary_path);
     std::ofstream pulses_out(pulses_path);
     std::ofstream windows_out(windows_path);
+    std::ofstream coincidences_out(coincidences_path);
 
-    if (!summary_out.is_open() || !pulses_out.is_open() || !windows_out.is_open()) {
+    if (!summary_out.is_open() || !pulses_out.is_open() || !windows_out.is_open() || !coincidences_out.is_open()) {
         throw std::runtime_error("Could not open one or more output CSV files.");
     }
 
     write_summary_header(summary_out);
     write_pulse_header(pulses_out);
     write_window_header(windows_out);
+    write_coincidence_header(coincidences_out);
 
     GaussianTripPulseTemplate pulse_template(
         cfg_.template_config.native_bin_width_us,
@@ -227,6 +301,7 @@ void BatchAnalysisRunner::run() const {
 
     GreedyLRTFitter fitter(pulse_template);
     WindowedPulseProcessor processor(pulse_template, fitter);
+    CoincidenceFitter coincidence_fitter(cfg_.coincidence_settings);
 
     std::cout << "Selected " << all_runs.size() << " production/good runs total.\n"
               << "Shard " << cfg_.shard_index << " / " << cfg_.num_shards
@@ -351,6 +426,21 @@ void BatchAnalysisRunner::run() const {
                 summary_out.flush();
                 pulses_out.flush();
                 windows_out.flush();
+
+                if (cfg_.enable_coincidence_output) {
+                    const CoincidenceFitResult coinc_result = coincidence_fitter.find(seg.hits);
+                    
+                    append_coincidence_rows(
+                        coincidences_out,
+                        loaded.run_id,
+                        seg.segment_name,
+                        hold_time_s,
+                        window,
+                        coinc_result.events
+                    );
+
+                    coincidences_out.flush();
+                }
             }
 
             ++n_runs_processed;

@@ -34,6 +34,7 @@ add_library(ucn_core
     src/templates/GaussianTripPulseTemplate.cpp
     src/inference/Likelihood.cpp
     src/inference/GreedyLRTFitter.cpp
+    src/inference/CoincidenceFitter.cpp
     src/app/WindowedPulseProcessor.cpp
     src/app/BatchAnalysisRunner.cpp
     src/io/AnalysisConfig.cpp

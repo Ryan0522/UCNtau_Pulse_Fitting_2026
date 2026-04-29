@@ -78,8 +78,39 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
     cfg.use_runinfo_windows = get_or<bool>(j, "use_runinfo_windows", cfg.use_runinfo_windows);
     cfg.runinfo_times_in_seconds = get_or<bool>(j, "runinfo_times_in_seconds", cfg.runinfo_times_in_seconds);
 
+    cfg.array_output_subdir = get_or<std::string>(j, "array_output_subdir", cfg.array_output_subdir);
     cfg.shard_index = get_or<int>(j, "shard_index", cfg.shard_index);
     cfg.num_shards = get_or<int>(j, "num_shards", cfg.num_shards);
+
+    cfg.enable_coincidence_output = get_or<bool>(j, "enable_coincidence_output", cfg.enable_coincidence_output);
+
+    if (j.contains("coincidence_settings")) {
+        const json& c = j.at("coincidence_settings");
+
+        cfg.coincidence_settings.coincidence_window_us =
+            get_or<double>(c, "coincidence_window_us",
+                        cfg.coincidence_settings.coincidence_window_us);
+
+        cfg.coincidence_settings.telescoping_window_us =
+            get_or<double>(c, "telescoping_window_us",
+                        cfg.coincidence_settings.telescoping_window_us);
+
+        cfg.coincidence_settings.pe_threshold =
+            get_or<int>(c, "pe_threshold",
+                        cfg.coincidence_settings.pe_threshold);
+
+        cfg.coincidence_settings.apply_pileup_correction =
+            get_or<bool>(c, "apply_pileup_correction",
+                        cfg.coincidence_settings.apply_pileup_correction);
+
+        cfg.coincidence_settings.threshold_on_pileup_corrected =
+            get_or<bool>(c, "threshold_on_pileup_corrected",
+                        cfg.coincidence_settings.threshold_on_pileup_corrected);
+
+        cfg.coincidence_settings.rng_seed =
+            get_or<std::uint64_t>(c, "rng_seed",
+                                cfg.coincidence_settings.rng_seed);
+    }
 
     if (j.contains("default_window")) {
         const json& w = j.at("default_window");
