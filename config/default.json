@@ -18,7 +18,7 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "",
+  "array_output_subdir": "array_localEvidence_cut3",
   "shard_index": 0,
   "num_shards": 1,
 
@@ -43,7 +43,7 @@
   "region_settings": {
     "coarse_bin_width_us": 0.5,
     "fine_bin_width_us": 0.25,
-    "min_gap_us": 10.0,
+    "min_gap_us": 100.0,
     "fit_end_padding_us": 100.0,
     "coincidence_window_us": 0.05,
     "coincidence_min_hits": 2,
@@ -58,9 +58,9 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 15.0,
+    "delta_nll_cut": 10.0,
     "min_spacing_us": 2.0,
-    "min_amplitude_pe": 15.0,
+    "min_amplitude_pe": 5.0,
     "max_amplitude_pe": 400.0,
     "background_per_bin": 0.0,
     "cluster_gap_us": 1.0,
@@ -69,13 +69,13 @@
 
     "enable_close_pulse_regularization": false,
     "close_reg_lambda_nll": 10.0,
-   "close_reg_window_us": 100.0,
+    "close_reg_window_us": 100.0,
     "close_reg_close_tau_us": 10.0,
     "close_reg_tail_tau_us": 30.0,
     "close_reg_eta": 0.10,
     "close_reg_floor_pe": 1.0,
 
-    "enable_local_evidence": false,
+    "enable_local_evidence": true,
     "local_evidence_pre_us": 0.5,
     "local_evidence_post_us": 2.0,
     "local_delta_nll_cut": 3.0,

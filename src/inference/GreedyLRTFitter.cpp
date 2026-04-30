@@ -18,7 +18,7 @@ namespace {
 double close_pulse_regularization_penalty(
     const PulseCandidate& candidate,
     const std::vector<PulseCandidate>& existing_pulses,
-    const FitSetting& settings
+    const FitSettings& settings
 ) {
     if (!settings.enable_close_pulse_regularization) return 0.0;
     if (settings.close_reg_lambda_nll <= 0.0) return 0.0;
@@ -37,7 +37,7 @@ double close_pulse_regularization_penalty(
         }
     }
 
-    if (!std::isinfinite(best_dt_us)) return 0.0;
+    if (std::isinf(best_dt_us)) return 0.0;
     if (best_dt_us > settings.close_reg_window_us) return 0.0;
 
     const double residual_scale_pe = 
@@ -282,14 +282,14 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
                 settings.background_per_bin
             );
 
-            const double gloabl_delta_keep = trial_nll - best.final_nll;
+            const double global_delta_keep = trial_nll - best.final_nll;
             const double penalty = close_pulse_regularization_penalty(
                 removed_pulse, trial_pulses, settings
             );
-            const double required_double_keep = settings.delta_nll_cut + penalty;
+            const double required_delta_keep = settings.delta_nll_cut + penalty;
 
-            double local_delta_keep = std::Numeric_limits<double>::infinity();
-            const bool local+pass = passes_local_evidence(
+            double local_delta_keep = std::numeric_limits<double>::infinity();
+            const bool local_pass = passes_local_evidence(
                 histogram,
                 trial_expected,
                 best.expected_total,
@@ -300,7 +300,7 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
 
             if (global_delta_keep < required_delta_keep || !local_pass) {
                 best.pulses = trial_pulses;
-                best.components = trial_components;
+                best_components = trial_components;
                 best.expected_total = trial_expected;
                 best.final_nll = trial_nll;
                 changed = true;
@@ -431,8 +431,8 @@ FitResult GreedyLRTFitter::fit(
             }
 
             for (double time_us = bound.left_us;
-+                 time_us <= bound.right_us + 0.5 * settings.scan_step_us;
-+                 time_us += settings.scan_step_us) {
+                time_us <= bound.right_us + 0.5 * settings.scan_step_us;
+                time_us += settings.scan_step_us) {
                 bool too_close = false;
                 for (const PulseCandidate& pulse : result.pulses) {
                     if (std::abs(pulse.time_us - time_us) < settings.min_spacing_us) {
