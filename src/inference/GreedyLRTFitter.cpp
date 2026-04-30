@@ -13,6 +13,129 @@
 namespace ucn
 {
 
+namespace {
+
+double close_pulse_regularization_penalty(
+    const PulseCandidate& candidate,
+    const std::vector<PulseCandidate>& existing_pulses,
+    const FitSetting& settings
+) {
+    if (!settings.enable_close_pulse_regularization) return 0.0;
+    if (settings.close_reg_lambda_nll <= 0.0) return 0.0;
+    if (settings.close_reg_close_tau_us <= 0.0) return 0.0;
+    if (settings.close_reg_tail_tau_us <= 0.0) return 0.0;
+
+    double best_dt_us = std::numeric_limits<double>::infinity();
+    double previous_amp_pe = 0.0;
+
+    for (const PulseCandidate& p : existing_pulses) {
+        const double dt_us = candidate.time_us - p.time_us;
+        if (dt_us <= 0.0) continue;
+        if (dt_us < best_dt_us) {
+            best_dt_us = dt_us;
+            previous_amp_pe = p.amplitude_pe;
+        }
+    }
+
+    if (!std::isinfinite(best_dt_us)) return 0.0;
+    if (best_dt_us > settings.close_reg_window_us) return 0.0;
+
+    const double residual_scale_pe = 
+        settings.close_reg_eta * previous_amp_pe *
+            std::exp(-best_dt_us / settings.close_reg_tail_tau_us)
+        + settings.close_reg_floor_pe;
+
+    const double safe_residual_scale_pe = std::max(residual_scale_pe, 1.0e-12);
+    const double z = candidate.amplitude_pe / safe_residual_scale_pe;
+
+    return settings.close_reg_lambda_nll *
+           std::exp(-best_dt_us / settings.close_reg_close_tau_us) *
+           std::exp(-z);
+}
+
+double poisson_nll_bin(
+    double observed, double expected,
+    double fixed_expected, double background_per_bin
+) {
+    const double mu = std::max(
+        expected + std::max(0.0, fixed_expected) + std::max(0.0, background_per_bin), 1.0e-12
+    );
+    return mu - observed * std::log(mu);
+}
+
+double local_nll_improvement(
+    const Histogram& histogram,
+    const std::vector<double>& old_expected,
+    const std::vector<double>& new_expected,
+    const FitSettings& settings,
+    double candidate_time_us
+) {
+    if (!settings.enable_local_evidence) {
+        return std::numeric_limits<double>::infinity();
+    }
+    if (histogram.bin_edges_us.size() != histogram.counts.size() + 1) {
+        throw std::invalid_argument("Histogram bin_edges_us must have size counts.size() + 1.");
+    }
+    if (old_expected.size() != histogram.counts.size() ||
+        new_expected.size() != histogram.counts.size()) {
+        throw std::invalid_argument("Expected histograms must match observed histogram size.");
+    }
+    if (!settings.fixed_expected.empty() &&
+        settings.fixed_expected.size() != histogram.counts.size()) {
+        throw std::invalid_argument("fixed_expected must match histogram size.");
+    }
+
+    const double left_us  = candidate_time_us - settings.local_evidence_pre_us;
+    const double right_us = candidate_time_us + settings.local_evidence_post_us;
+
+    double old_nll = 0.0;
+    double new_nll = 0.0;
+    int n_bins_used = 0;
+
+    for (std::size_t i = 0; i < histogram.counts.size(); ++i) {
+        const double bin_left_us = histogram.bin_edges_us[i];
+        const double bin_right_us = histogram.bin_edges_us[i + 1];
+
+        if (bin_right_us <= left_us || bin_left_us >= right_us) continue;
+
+        const double fixed = settings.fixed_expected.empty() ? 0.0 : settings.fixed_expected[i];
+        old_nll += poisson_nll_bin(
+            histogram.counts[i], old_expected[i], fixed, settings.background_per_bin
+        );
+        new_nll += poisson_nll_bin(
+            histogram.counts[i], new_expected[i], fixed, settings.background_per_bin
+        );
+        ++n_bins_used;
+    }
+
+    if (n_bins_used == 0) {
+        return -std::numeric_limits<double>::infinity();
+    }
+
+    return old_nll - new_nll;
+}
+
+bool passes_local_evidence(
+    const Histogram& histogram,
+    const std::vector<double>& old_expected,
+    const std::vector<double>& new_expected,
+    const FitSettings& settings,
+    double candidate_time_us,
+    double& local_delta_out
+) {
+    if (!settings.enable_local_evidence) {
+        local_delta_out = std::numeric_limits<double>::infinity();
+        return true;
+    }
+
+    local_delta_out = local_nll_improvement(
+        histogram, old_expected, new_expected, settings, candidate_time_us
+    );
+    return local_delta_out >= settings.local_delta_nll_cut;
+}
+
+} // namespace
+
 GreedyLRTFitter::GreedyLRTFitter(const PulseTemplate& pulse_template)
     : pulse_template_(pulse_template) {
 }
@@ -106,6 +229,8 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
     const FitSettings& settings
 ) const {
     FitResult best = current;
+    std::vector<std::vector<double>> best_components = components;
+
     if (!settings.enable_back_pruning || current.pulses.size() < 2) {
         return best;
     }
@@ -115,6 +240,8 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
         changed = false;
 
         for (std::size_t remove_index = 0; remove_index < best.pulses.size(); ++remove_index) {
+            const PulseCandidate removed_pulse = best.pulses[remove_index];
+            
             std::vector<PulseCandidate> trial_pulses;
             std::vector<std::vector<double>> trial_components;
             std::vector<double> trial_amplitudes;
@@ -124,7 +251,7 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
                     continue;
                 }
                 trial_pulses.push_back(best.pulses[j]);
-                trial_components.push_back(components[j]);
+                trial_components.push_back(best_components[j]);
                 trial_amplitudes.push_back(best.pulses[j].amplitude_pe);
             }
 
@@ -154,10 +281,26 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
                 settings.fixed_expected,
                 settings.background_per_bin
             );
-            double delta = trial_nll - best.final_nll;
 
-            if (delta < settings.delta_nll_cut) {
+            const double gloabl_delta_keep = trial_nll - best.final_nll;
+            const double penalty = close_pulse_regularization_penalty(
+                removed_pulse, trial_pulses, settings
+            );
+            const double required_double_keep = settings.delta_nll_cut + penalty;
+
+            double local_delta_keep = std::Numeric_limits<double>::infinity();
+            const bool local+pass = passes_local_evidence(
+                histogram,
+                trial_expected,
+                best.expected_total,
+                settings,
+                removed_pulse.time_us,
+                local_delta_keep
+            );
+
+            if (global_delta_keep < required_delta_keep || !local_pass) {
                 best.pulses = trial_pulses;
+                best.components = trial_components;
                 best.expected_total = trial_expected;
                 best.final_nll = trial_nll;
                 changed = true;
@@ -183,6 +326,8 @@ FitResult GreedyLRTFitter::fit(
                 << " min_spacing_us=" << settings.min_spacing_us
                 << " min_amplitude_pe=" << settings.min_amplitude_pe
                 << " max_amplitude_pe=" << settings.max_amplitude_pe
+                << " close_reg=" << settings.enable_close_pulse_regularization
+                << " local_evidence=" << settings.enable_local_evidence
                 << "\n";
 
         std::cerr << "[FIT-HIST] counts =";
@@ -244,8 +389,8 @@ FitResult GreedyLRTFitter::fit(
 
     int fit_iter = 0;
     while (true) {
+        ++fit_iter;
         if (settings.debug) {
-            fit_iter++;
             std::cerr << "\n[FIT-ITER " << fit_iter << "]"
                     << " current_n_pulses=" << result.pulses.size()
                     << " current_final_nll=" << result.final_nll
@@ -259,7 +404,11 @@ FitResult GreedyLRTFitter::fit(
             std::cerr << "\n";
         }
 
+        double best_margin = -std::numeric_limits<double>::infinity();
         double best_delta = 0.0;
+        double best_required_delta = settings.delta_nll_cut;
+        double best_penalty = 0.0;
+        double best_local_delta = std::numeric_limits<double>::infinity();
         int best_cluster_index = -1;
         double best_time = 0.0;
         double best_amplitude = 0.0;
@@ -281,7 +430,9 @@ FitResult GreedyLRTFitter::fit(
                         << "\n";
             }
 
-            for (double time_us = bound.left_us; time_us <= bound.right_us + 0.5 * settings.scan_step_us; time_us += settings.scan_step_us) {
+            for (double time_us = bound.left_us;
++                 time_us <= bound.right_us + 0.5 * settings.scan_step_us;
++                 time_us += settings.scan_step_us) {
                 bool too_close = false;
                 for (const PulseCandidate& pulse : result.pulses) {
                     if (std::abs(pulse.time_us - time_us) < settings.min_spacing_us) {
@@ -345,8 +496,32 @@ FitResult GreedyLRTFitter::fit(
                     settings.fixed_expected,
                     settings.background_per_bin
                 );
-                double delta = result.final_nll - trial_nll;
-                
+                const double delta = result.final_nll - trial_nll;
+
+                std::vector<PulseCandidate> refit_existing = result.pulses;
+                for (std::size_t j = 0; j < refit_existing.size() && j < trial_amplitudes.size(); ++j) {
+                    refit_existing[j].amplitude_pe = trial_amplitudes[j];
+                }
+                PulseCandidate candidate{time_us, trial_amplitudes.back()};
+
+                const double penalty = close_pulse_regularization_penalty(
+                    candidate, refit_existing, settings
+                );
+                const double required_delta = settings.delta_nll_cut + penalty;
+
+                double local_delta = std::numeric_limits<double>::infinity();
+                const bool local_pass = passes_local_evidence(
+                    histogram,
+                    result.expected_total,
+                    trial_expected,
+                    settings,
+                    time_us,
+                    local_delta
+                );
+
+                const double margin = local_pass ? (delta - required_delta)
+                                                 : -std::numeric_limits<double>::infinity();
+                 
                 if (settings.debug) {
                     std::cerr << "[TRY]"
                             << " iter=" << fit_iter
@@ -355,11 +530,20 @@ FitResult GreedyLRTFitter::fit(
                             << " trial_amp=" << trial_amplitudes.back()
                             << " trial_nll=" << trial_nll
                             << " delta=" << delta
+                            << " penalty=" << penalty
+                            << " required=" << required_delta
+                            << " local_delta=" << local_delta
+                            << " local_pass=" << local_pass
+                            << " margin=" << margin
                             << "\n";
                 }
 
-                if (delta > best_delta) {
+                if (margin > best_margin) {
+                    best_margin = margin;
                     best_delta = delta;
+                    best_required_delta = required_delta;
+                    best_penalty = penalty;
+                    best_local_delta = local_delta;
                     best_cluster_index = static_cast<int>(cluster_index);
                     best_time = time_us;
                     best_amplitude = trial_amplitudes.back();
@@ -370,9 +554,9 @@ FitResult GreedyLRTFitter::fit(
             }
         }
 
-        if (best_cluster_index < 0 || best_delta < settings.delta_nll_cut) {
-            break;
-        }
+        if (best_cluster_index < 0 || best_margin < 0.0) {
+             break;
+         }
 
         cluster_used[static_cast<std::size_t>(best_cluster_index)] = true;
         result.pulses.push_back(PulseCandidate{best_time, best_amplitude});
@@ -388,6 +572,10 @@ FitResult GreedyLRTFitter::fit(
                     << " accepted_time=" << best_time
                     << " accepted_amp=" << best_amplitude
                     << " accepted_delta=" << best_delta
+                    << " required_delta=" << best_required_delta
+                    << " penalty=" << best_penalty
+                    << " local_delta=" << best_local_delta
+                    << " margin=" << best_margin
                     << "\n";
 
             std::cerr << "[FIT-AFTER-REFIT]";
@@ -405,13 +593,6 @@ FitResult GreedyLRTFitter::fit(
             settings.fixed_expected,
             settings.background_per_bin
         );
-
-        if (settings.debug) {
-            std::cerr << "accepted cluster=" << best_cluster_index
-                      << " time_us=" << best_time
-                      << " delta_nll=" << best_delta
-                      << " pulses=" << result.pulses.size() << "\n";
-        }
 
         FitResult pruned = remove_weak_pulses(histogram, result, components, settings);
         if (pruned.pulses.size() != result.pulses.size()) {

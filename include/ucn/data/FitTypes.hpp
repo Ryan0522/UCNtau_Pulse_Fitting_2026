@@ -32,6 +32,25 @@ struct FitSettings {
     double cluster_gap_us = 1.0;
     int max_coordinate_descent_steps = 20;
     bool enable_back_pruning = true;
+
+    // Method 1: close-pulse residual regularization.
+    // Penalty = lambda * exp(-dt / close_tau) * exp(-A_new / residual_scale),
+    // residual_scale = eta * A_prev * exp(-dt / tail_tau) + floor_pe.
+    bool enable_close_pulse_regularization = false;
+    double close_reg_lambda_nll = 0.0;
+    double close_reg_window_us = 100.0;
+    double close_reg_close_tau_us = 10.0;
+    double close_reg_tail_tau_us = 30.0;
+    double close_reg_eta = 0.10;
+    double close_reg_floor_pe = 1.0;
+
+    // Method 2: local evidence requirement.
+    // The local NLL improvement around the candidate time must exceed local_delta_nll_cut.
+    bool enable_local_evidence = false;
+    double local_evidence_pre_us = 0.5;
+    double local_evidence_post_us = 2.0;
+    double local_delta_nll_cut = 3.0;
+
     bool debug = false;
     std::vector<double> fixed_expected;
 };

@@ -66,6 +66,20 @@
     "cluster_gap_us": 1.0,
     "max_coordinate_descent_steps": 20,
     "enable_back_pruning": true,
+
+    "enable_close_pulse_regularization": false,
+    "close_reg_lambda_nll": 10.0,
+   "close_reg_window_us": 100.0,
+    "close_reg_close_tau_us": 10.0,
+    "close_reg_tail_tau_us": 30.0,
+    "close_reg_eta": 0.10,
+    "close_reg_floor_pe": 1.0,
+
+    "enable_local_evidence": false,
+    "local_evidence_pre_us": 0.5,
+    "local_evidence_post_us": 2.0,
+    "local_delta_nll_cut": 3.0,
+
     "debug": false
   },
 

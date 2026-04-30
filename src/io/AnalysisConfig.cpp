@@ -191,8 +191,33 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.fit_settings.max_coordinate_descent_steps =
             get_or<int>(f, "max_coordinate_descent_steps",
                         cfg.fit_settings.max_coordinate_descent_steps);
+        
         cfg.fit_settings.enable_back_pruning =
             get_or<bool>(f, "enable_back_pruning", cfg.fit_settings.enable_back_pruning);
+        cfg.fit_settings.enable_close_pulse_regularization =
+            get_or<bool>(f, "enable_close_pulse_regularization",
+                         cfg.fit_settings.enable_close_pulse_regularization);
+        cfg.fit_settings.close_reg_lambda_nll =
+            get_or<double>(f, "close_reg_lambda_nll", cfg.fit_settings.close_reg_lambda_nll);
+        cfg.fit_settings.close_reg_window_us =
+            get_or<double>(f, "close_reg_window_us", cfg.fit_settings.close_reg_window_us);
+        cfg.fit_settings.close_reg_close_tau_us =
+            get_or<double>(f, "close_reg_close_tau_us", cfg.fit_settings.close_reg_close_tau_us);
+        cfg.fit_settings.close_reg_tail_tau_us =
+            get_or<double>(f, "close_reg_tail_tau_us", cfg.fit_settings.close_reg_tail_tau_us);
+        cfg.fit_settings.close_reg_eta =
+            get_or<double>(f, "close_reg_eta", cfg.fit_settings.close_reg_eta);
+        cfg.fit_settings.close_reg_floor_pe =
+            get_or<double>(f, "close_reg_floor_pe", cfg.fit_settings.close_reg_floor_pe);
+
+        cfg.fit_settings.enable_local_evidence =
+            get_or<bool>(f, "enable_local_evidence", cfg.fit_settings.enable_local_evidence);
+        cfg.fit_settings.local_evidence_pre_us =
+            get_or<double>(f, "local_evidence_pre_us", cfg.fit_settings.local_evidence_pre_us);
+        cfg.fit_settings.local_evidence_post_us =
+            get_or<double>(f, "local_evidence_post_us", cfg.fit_settings.local_evidence_post_us);
+        cfg.fit_settings.local_delta_nll_cut =
+            get_or<double>(f, "local_delta_nll_cut", cfg.fit_settings.local_delta_nll_cut);
         cfg.fit_settings.debug =
             get_or<bool>(f, "debug", cfg.fit_settings.debug);
     }
