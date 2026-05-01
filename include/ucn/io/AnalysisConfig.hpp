@@ -3,8 +3,10 @@
 #include "ucn/data/SignalTypes.hpp"
 #include "ucn/inference/CoincidenceFitter.hpp"
 #include <nlohmann/json.hpp>
+#include <map>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace ucn::io {
 
@@ -41,6 +43,18 @@ struct RunWindow {
     double end_end_us = 180.0e6;
 };
 
+struct TailExtractionSettings {
+    bool enable = false;
+    double bin_width_us = 0.5;
+    double window_us = 500.0;
+    double pretrigger_us = 0.0;
+    double min_amplitude_pe = 0.0;
+    double max_amplitude_pe = 1.0e5;
+    bool only_non_pileup = true;
+    double min_neighbor_separation_us = 0.0;
+    std::vector<std::string> regions = {"signal"};
+};
+
 struct AnalysisConfig {
     // Run selection
     int year = 2022;
@@ -66,10 +80,11 @@ struct AnalysisConfig {
     bool runinfo_times_in_seconds = false;
     RunWindow default_window;
 
-    // Template + fitter settings
+    // Template + fitter + tail settings
     PulseTemplateConfig template_config;
     RegionSettings region_settings;
     FitSettings fit_settings;
+    TailExtractionSettings tail_extraction;
 
     // Optional loaded metadata
     json runinfo_json = json::object();
@@ -83,6 +98,13 @@ struct AnalysisConfig {
     // Coincidence Settings
     bool enable_coincidence_output = true;
     CoincidenceSettings coincidence_settings;
+
+    // 2022 / 2021 Dagger ROOT file setup
+    bool require_tems_tree = true;
+    // Configurable ROOT tree/channel -> analysis segment mapping.
+    // Example: root_channel_maps["tmc_0"][1] = "12"
+    std::map<std::string, std::map<int, std::string>> root_channel_maps;
+    std::vector<std::string> segment_order;
 };
 
 AnalysisConfig load_analysis_config(const std::string& config_path);

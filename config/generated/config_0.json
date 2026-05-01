@@ -14,10 +14,39 @@
   "tems_tree_name": "tems",
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
-  "array_output_subdir": "array_localEvidence_cut3",
+  "array_output_subdir": "array_local_40nll",
   "shard_index": 0,
   "num_shards": 32,
   "enable_coincidence_output": true,
+  "require_tems_tree": true,
+  "root_channel_map": {
+    "tmcs_0": {
+      "12": [
+        1,
+        2
+      ],
+      "34": [
+        3,
+        4
+      ]
+    },
+    "tmcs_1": {
+      "56": [
+        11,
+        12
+      ],
+      "78": [
+        13,
+        14
+      ]
+    }
+  },
+  "segment_order": [
+    "12",
+    "34",
+    "56",
+    "78"
+  ],
   "template_config": {
     "native_bin_width_us": 0.5,
     "support_end_us": 100.0,
@@ -47,10 +76,23 @@
     "enable_background_fit": true,
     "debug": false
   },
+  "tail_extraction_settings": {
+    "enable": true,
+    "bin_width_us": 0.5,
+    "window_us": 500.0,
+    "pretrigger_us": 10.0,
+    "min_amplitude_pe": 0.0,
+    "max_amplitude_pe": 1000000000.0,
+    "only_non_pileup": true,
+    "min_neighbor_separation_us": 500.0,
+    "regions": [
+      "signal"
+    ]
+  },
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 10.0,
+    "delta_nll_cut": 40.0,
     "min_spacing_us": 2.0,
     "min_amplitude_pe": 5.0,
     "max_amplitude_pe": 400.0,
@@ -59,7 +101,7 @@
     "max_coordinate_descent_steps": 20,
     "enable_back_pruning": true,
     "enable_close_pulse_regularization": false,
-    "close_reg_lambda_nll": 10.0,
+    "close_reg_lambda_nll": 100.0,
     "close_reg_window_us": 100.0,
     "close_reg_close_tau_us": 10.0,
     "close_reg_tail_tau_us": 30.0,
@@ -68,7 +110,7 @@
     "enable_local_evidence": true,
     "local_evidence_pre_us": 0.5,
     "local_evidence_post_us": 2.0,
-    "local_delta_nll_cut": 3.0,
+    "local_delta_nll_cut": 35.0,
     "debug": false
   },
   "coincidence_settings": {

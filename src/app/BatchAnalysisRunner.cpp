@@ -150,6 +150,28 @@ void write_window_header(std::ofstream& out) {
            "pulse_count,seed_count,observed_count,expected_count,final_nll\n";
 }
 
+void write_tail_pulse_header(std::ofstream& out) {
+    out << "tail_id,run,segment,hold_time_s,region,pulse_index_in_region,"
+           "pulse_time_us,amplitude_pe,window_index,window_width_us,"
+           "is_pileup,uses_fine_bins,bin_width_us,window_start_us,"
+           "window_end_us,n_raw_hits\n";
+}
+
+void write_tail_waveform_header(std::ofstream& out, int n_bins) {
+    out << "tail_id,run,segment,hold_time_s,region,pulse_index_in_region,"
+           "pulse_time_us,amplitude_pe,window_index,window_width_us,"
+           "is_pileup,uses_fine_bins,bin_width_us,window_start_us,"
+           "window_end_us,n_raw_hits";
+
+    const char old_fill = out.fill();
+
+    for (int b = 0; b < n_bins; ++b) {
+        out << ",b" << std::setw(4) << std::setfill('0') << b;
+    }
+
+    out << std::setfill(old_fill) << '\n';
+}
+
 void append_tagged_pulses(std::ofstream& out,
                           const std::string& run_id,
                           const std::string& segment,
@@ -237,6 +259,113 @@ void append_coincidence_rows(std::ofstream& out,
     }
 }
 
+bool tail_region_enabled(const io::TailExtractionSettings& settings,
+                         const std::string& region_name) {
+    if (settings.regions.empty()) return true;
+    return std::find(settings.regions.begin(), settings.regions.end(), region_name) != settings.regions.end();
+}
+
+bool has_nearby_fitted_pulse(const std::vector<TaggedPulse>& pulses, std::size_t i, double min_separation_us) {
+    if (min_separation_us <= 0.0) return false;
+    
+    const double ti = pulses[i].time_us;
+    for (std::size_t j = 0; j < pulses.size(); ++j) {
+        if (j == i) continue;
+        if (std::abs(pulses[j].time_us - ti) < min_separation_us) return true;
+    }
+    return false;
+}
+
+void append_tail_waveforms(std::ofstream& tail_pulses_out,
+                           std::ofstream& tail_waveforms_out,
+                           const std::string& run_id,
+                           const std::string& segment,
+                           double hold_time_s,
+                           const std::string& region_name,
+                           const std::vector<Hit>& raw_hits,
+                           const std::vector<TaggedPulse>& pulses,
+                           const io::TailExtractionSettings& settings) {
+    if (!settings.enable) return;
+    if (!tail_region_enabled(settings, region_name)) return;
+    if (settings.bin_width_us <= 0.0 || settings.window_us <= 0.0) return;
+
+    const int n_bins = static_cast<int>(std::ceil(settings.window_us / settings.bin_width_us));
+    if (n_bins <= 0) return;
+
+    for (std::size_t ip = 0; ip < pulses.size(); ++ip) {
+        const TaggedPulse& p = pulses[ip];
+
+        if (settings.only_non_pileup && p.is_pileup) continue;
+        if (p.amplitude_pe < settings.min_amplitude_pe) continue;
+        if (p.amplitude_pe > settings.max_amplitude_pe) continue;
+        if (has_nearby_fitted_pulse(pulses, ip, settings.min_neighbor_separation_us)) continue;
+
+        const double window_start_us = p.time_us - settings.pretrigger_us;
+        const double window_end_us = window_start_us + static_cast<double>(n_bins) * settings.bin_width_us;
+
+        std::vector<int> counts(static_cast<std::size_t>(n_bins), 0);
+
+        auto first = std::lower_bound(
+            raw_hits.begin(), raw_hits.end(), window_start_us, [](const Hit& h, double t) { return h.time_us < t; }
+        );
+
+        int n_raw_hits = 0;
+        for (auto it = first; it != raw_hits.end() && it->time_us < window_end_us; ++it) {
+            const int bin = static_cast<int>((it->time_us - window_start_us) / settings.bin_width_us);
+            if (bin >= 0 && bin < n_bins) {
+                counts[static_cast<std::size_t>(bin)] += 1;
+                ++n_raw_hits;
+            }
+        }
+
+        std::ostringstream id;
+        id << run_id << '_' << segment << '_' << region_name << '_'
+           << ip << '_'
+           << static_cast<long long>(std::llround(p.time_us * 1000.0));
+        const std::string tail_id = id.str();
+
+        tail_pulses_out << tail_id << ','
+                        << run_id << ','
+                        << segment << ','
+                        << std::setprecision(17) << hold_time_s << ','
+                        << region_name << ','
+                        << ip << ','
+                        << p.time_us << ','
+                        << p.amplitude_pe << ','
+                        << p.window_index << ','
+                        << p.window_width_us << ','
+                        << (p.is_pileup ? 1 : 0) << ','
+                        << (p.uses_fine_bins ? 1 : 0) << ','
+                        << settings.bin_width_us << ','
+                        << window_start_us << ','
+                        << window_end_us << ','
+                        << n_raw_hits << '\n';
+        
+        tail_waveforms_out << tail_id << ','
+                           << run_id << ','
+                           << segment << ','
+                           << std::setprecision(17) << hold_time_s << ','
+                           << region_name << ','
+                           << ip << ','
+                           << p.time_us << ','
+                           << p.amplitude_pe << ','
+                           << p.window_index << ','
+                           << p.window_width_us << ','
+                           << (p.is_pileup ? 1 : 0) << ','
+                           << (p.uses_fine_bins ? 1 : 0) << ','
+                           << settings.bin_width_us << ','
+                           << window_start_us << ','
+                           << window_end_us << ','
+                           << n_raw_hits;
+
+        for (int b = 0; b < n_bins; ++b) {
+            tail_waveforms_out << ',' << counts[static_cast<std::size_t>(b)];
+        }
+
+        tail_waveforms_out << '\n';
+    }
+}
+
 } // namespace
 
 BatchAnalysisRunner::BatchAnalysisRunner(const io::AnalysisConfig& cfg)
@@ -252,11 +381,13 @@ void BatchAnalysisRunner::run() const {
         cfg_.num_shards
     );
 
-    const fs::path metadata_path     = out_dir / "analysis_metadata.json";
-    const fs::path summary_path      = out_dir / "run_segment_summary.csv";
-    const fs::path pulses_path       = out_dir / "all_pulses.csv";
-    const fs::path windows_path      = out_dir / "all_windows.csv";
-    const fs::path coincidences_path = out_dir / "all_coincidences.csv";
+    const fs::path metadata_path       = out_dir / "analysis_metadata.json";
+    const fs::path summary_path        = out_dir / "run_segment_summary.csv";
+    const fs::path pulses_path         = out_dir / "all_pulses.csv";
+    const fs::path windows_path        = out_dir / "all_windows.csv";
+    const fs::path coincidences_path   = out_dir / "all_coincidences.csv";
+    const fs::path tail_pulses_path    = out_dir / "all_tail_pulses.csv";
+    const fs::path tail_waveforms_path = out_dir / "all_tail_waveforms.csv";
 
     std::ofstream meta_out(metadata_path);
 
@@ -276,6 +407,34 @@ void BatchAnalysisRunner::run() const {
     std::ofstream pulses_out(pulses_path);
     std::ofstream windows_out(windows_path);
     std::ofstream coincidences_out(coincidences_path);
+    std::ofstream tail_pulses_out;
+    std::ofstream tail_waveforms_out;
+    if (cfg_.tail_extraction.enable) {
+        if (cfg_.tail_extraction.bin_width_us <= 0.0 || cfg_.tail_extraction.window_us <= 0.0) {
+            throw std::runtime_error(
+                "Tail extraction enabled, but bin_width_us or window_us is non-positive."
+            );
+        }
+
+        const int tail_n_bins = static_cast<int>(
+            std::ceil(cfg_.tail_extraction.window_us /
+                    cfg_.tail_extraction.bin_width_us)
+        );
+
+        if (tail_n_bins <= 0) {
+            throw std::runtime_error("Tail extraction produced non-positive n_bins.");
+        }
+
+        tail_pulses_out.open(tail_pulses_path);
+        tail_waveforms_out.open(tail_waveforms_path);
+
+        if (!tail_pulses_out.is_open() || !tail_waveforms_out.is_open()) {
+            throw std::runtime_error("Could not open tail waveform output CSV files.");
+        }
+
+        write_tail_pulse_header(tail_pulses_out);
+        write_tail_waveform_header(tail_waveforms_out, tail_n_bins);
+    }
 
     if (!summary_out.is_open() || !pulses_out.is_open() || !windows_out.is_open() || !coincidences_out.is_open()) {
         throw std::runtime_error("Could not open one or more output CSV files.");
@@ -423,6 +582,47 @@ void BatchAnalysisRunner::run() const {
                     result.end_window_summaries
                 );
 
+                if (cfg_.tail_extraction.enable) {
+                    append_tail_waveforms(
+                        tail_pulses_out,
+                        tail_waveforms_out,
+                        loaded.run_id,
+                        seg.segment_name,
+                        hold_time_s,
+                        "background",
+                        seg.hits,
+                        result.background_pulses,
+                        cfg_.tail_extraction
+                    );
+
+                    append_tail_waveforms(
+                        tail_pulses_out,
+                        tail_waveforms_out,
+                        loaded.run_id,
+                        seg.segment_name,
+                        hold_time_s,
+                        "signal",
+                        seg.hits,
+                        result.signal_pulses,
+                        cfg_.tail_extraction
+                    );
+
+                    append_tail_waveforms(
+                        tail_pulses_out,
+                        tail_waveforms_out,
+                        loaded.run_id,
+                        seg.segment_name,
+                        hold_time_s,
+                        "end",
+                        seg.hits,
+                        result.end_pulses,
+                        cfg_.tail_extraction
+                    );
+
+                    tail_pulses_out.flush();
+                    tail_waveforms_out.flush();
+                }
+
                 summary_out.flush();
                 pulses_out.flush();
                 windows_out.flush();
@@ -455,7 +655,9 @@ void BatchAnalysisRunner::run() const {
               << "  Runs failed:    " << n_runs_failed << '\n'
               << "  Summary:        " << summary_path << '\n'
               << "  Pulses:         " << pulses_path << '\n'
-              << "  Windows:        " << windows_path << '\n';
+              << "  Windows:        " << windows_path << '\n'
+              << "  Tail pulses:    " << tail_pulses_path << '\n'
+              << "  Tail waveforms: " << tail_waveforms_path << '\n';
 }
 
 } // namespace ucn::app

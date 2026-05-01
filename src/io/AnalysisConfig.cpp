@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -83,6 +84,44 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
     cfg.num_shards = get_or<int>(j, "num_shards", cfg.num_shards);
 
     cfg.enable_coincidence_output = get_or<bool>(j, "enable_coincidence_output", cfg.enable_coincidence_output);
+
+    cfg.require_tems_tree = get_or<bool>(j, "require_tems_tree", cfg.require_tems_tree);
+    cfg.segment_order = {"12", "34", "56", "78"};
+    cfg.root_channel_maps = {
+        {cfg.tmcs0_tree_name, {{1, "12"}, {2, "12"}, {3, "34"}, {4, "34"}}},
+        {cfg.tmcs1_tree_name, {{11, "56"}, {12, "56"}, {13, "78"}, {14, "78"}}}
+    };
+
+    if (j.contains("root_channel_map")) {
+        cfg.root_channel_maps.clear();
+        cfg.segment_order.clear();
+
+        const json& m = j.at("root_channel_map");
+        for (auto tree_it = m.begin(); tree_it != m.end(); ++tree_it) {
+            const std::string tree_name = tree_it.key();
+            const json& segment_map = tree_it.value();
+
+            for (auto seg_it = segment_map.begin(); seg_it != segment_map.end(); ++seg_it) {
+                const std::string segment_name = seg_it.key();
+
+                if (std::find(cfg.segment_order.begin(), cfg.segment_order.end(), segment_name) ==
+                    cfg.segment_order.end()) {
+                    cfg.segment_order.push_back(segment_name);
+                }
+
+                for (const auto& ch : seg_it.value()) {
+                    cfg.root_channel_maps[tree_name][ch.get<int>()] = segment_name;
+                }
+            }
+        }
+    }
+
+    if (j.contains("segment_order")) {
+        cfg.segment_order.clear();
+        for (const auto& seg : j.at("segment_order")) {
+            cfg.segment_order.push_back(seg.get<std::string>());
+        }
+    }
 
     if (j.contains("coincidence_settings")) {
         const json& c = j.at("coincidence_settings");
@@ -168,6 +207,33 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<bool>(r, "enable_background_fit", cfg.region_settings.enable_background_fit);
         cfg.region_settings.debug =
             get_or<bool>(r, "debug", cfg.region_settings.debug);
+    }
+
+    if (j.contains("tail_extraction_settings")) {
+        const json& t = j.at("tail_extraction_settings");
+        cfg.tail_extraction.enable =
+            get_or<bool>(t, "enable", cfg.tail_extraction.enable);
+        cfg.tail_extraction.bin_width_us =
+            get_or<double>(t, "bin_width_us", cfg.tail_extraction.bin_width_us);
+        cfg.tail_extraction.window_us =
+            get_or<double>(t, "window_us", cfg.tail_extraction.window_us);
+        cfg.tail_extraction.pretrigger_us =
+            get_or<double>(t, "pretrigger_us", cfg.tail_extraction.pretrigger_us);
+        cfg.tail_extraction.min_amplitude_pe =
+            get_or<double>(t, "min_amplitude_pe", cfg.tail_extraction.min_amplitude_pe);
+        cfg.tail_extraction.max_amplitude_pe =
+            get_or<double>(t, "max_amplitude_pe", cfg.tail_extraction.max_amplitude_pe);
+        cfg.tail_extraction.only_non_pileup =
+            get_or<bool>(t, "only_non_pileup", cfg.tail_extraction.only_non_pileup);
+        cfg.tail_extraction.min_neighbor_separation_us =
+            get_or<double>(t, "min_neighbor_separation_us",
+                           cfg.tail_extraction.min_neighbor_separation_us);
+        if (t.contains("regions")) {
+            cfg.tail_extraction.regions.clear();
+            for (const auto& r : t.at("regions")) {
+                cfg.tail_extraction.regions.push_back(r.get<std::string>());
+            }
+        }
     }
 
     if (j.contains("fit_settings")) {

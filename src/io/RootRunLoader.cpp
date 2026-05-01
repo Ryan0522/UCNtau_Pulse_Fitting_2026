@@ -176,41 +176,45 @@ LoadedRun load_root_run(const AnalysisConfig& cfg, int run_number) {
         throw std::runtime_error("Could not open ROOT file: " + root_path.string());
     }
 
-    TTree* tmcs0 = dynamic_cast<TTree*>(file->Get(cfg.tmcs0_tree_name.c_str()));
-    TTree* tmcs1 = dynamic_cast<TTree*>(file->Get(cfg.tmcs1_tree_name.c_str()));
-    TTree* tems  = dynamic_cast<TTree*>(file->Get(cfg.tems_tree_name.c_str()));
-
-    if (tmcs0 == nullptr || tmcs1 == nullptr || tems == nullptr) {
+    if (cfg.root_channel_maps.empty()) {
         file->Close();
-        throw std::runtime_error(
-            "Missing required tree(s) in " + root_path.string() +
-            ". Expected: " + cfg.tmcs0_tree_name + ", " +
-            cfg.tmcs1_tree_name + ", " + cfg.tems_tree_name
-        );
+        throw std::runtime_error("No ROOT channel map configured.");
+    }
+
+    if (cfg.require_tems_tree) {
+        TTree* tems = dynamic_cast<TTree*>(file->Get(cfg.tems_tree_name.c_str()));
+        if (tems == nullptr) {
+            file->Close();
+            throw std::runtime_error(
+                "Missing required tree in " + root_path.string() +
+                ". Expected: " + cfg.tems_tree_name
+            );
+        }
     }
 
     std::map<std::string, std::vector<Hit>> seg_map;
-    seg_map["12"] = {};
-    seg_map["34"] = {};
-    seg_map["56"] = {};
-    seg_map["78"] = {};
+    for (const std::string& segment_name : cfg.segment_order) {
+        seg_map[segment_name] = {};
+    }
 
-    const std::map<int, std::string> tmcs0_channels = {
-        {1, "12"},
-        {2, "12"},
-        {3, "34"},
-        {4, "34"}
-    };
+    for (const auto& [tree_name, channel_to_segment] : cfg.root_channel_maps) {
+        TTree* tree = dynamic_cast<TTree*>(file->Get(tree_name.c_str()));
+        if (tree == nullptr) {
+            file->Close();
+            throw std::runtime_error(
+                "Missing required mapped tree in " + root_path.string() +
+                ". Expected: " + tree_name
+            );
+        }
 
-    const std::map<int, std::string> tmcs1_channels = {
-        {11, "56"},
-        {12, "56"},
-        {13, "78"},
-        {14, "78"}
-    };
+        for (const auto& [channel, segment_name] : channel_to_segment) {
+            if (!seg_map.count(segment_name)) {
+                seg_map[segment_name] = {};
+            }
+        }
 
-    read_tree_into_segments(tmcs0, tmcs0_channels, seg_map);
-    read_tree_into_segments(tmcs1, tmcs1_channels, seg_map);
+        read_tree_into_segments(tree, channel_to_segment, seg_map);
+    }
 
     file->Close();
 
