@@ -14,7 +14,7 @@
   "tems_tree_name": "tems",
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
-  "array_output_subdir": "array_local_40nll",
+  "array_output_subdir": "array_local_10nll_new",
   "shard_index": 29,
   "num_shards": 32,
   "enable_coincidence_output": true,
@@ -49,24 +49,26 @@
   ],
   "template_config": {
     "native_bin_width_us": 0.5,
-    "support_end_us": 100.0,
+    "support_end_us": 500.0,
     "baseline": 0.0,
-    "gauss_amp": 0.264853519,
+    "gauss_amp": 0.541686328,
     "gauss_mu": 0.0,
-    "gauss_sigma": 0.182163026,
+    "gauss_sigma": 0.117371,
     "tail_start_us": 0.0,
-    "a1": 0.0296819526,
-    "tau1": 5.0,
-    "a2": 0.0549622939,
-    "tau2": 1.14242898,
-    "a3": 0.00519776557,
-    "tau3": 29.3893616
+    "a1": 0.155684,
+    "tau1": 1.152482,
+    "a2": 0.047826,
+    "tau2": 6.189503,
+    "a3": 0.007353,
+    "tau3": 31.889925,
+    "a4": 0.000684,
+    "tau4": 225.223018
   },
   "region_settings": {
     "coarse_bin_width_us": 0.5,
     "fine_bin_width_us": 0.25,
-    "min_gap_us": 100.0,
-    "fit_end_padding_us": 100.0,
+    "min_gap_us": 500.0,
+    "fit_end_padding_us": 500.0,
     "coincidence_window_us": 0.05,
     "coincidence_min_hits": 2,
     "seed_veto_window_us": 1.0,
@@ -77,7 +79,7 @@
     "debug": false
   },
   "tail_extraction_settings": {
-    "enable": true,
+    "enable": false,
     "bin_width_us": 0.5,
     "window_us": 500.0,
     "pretrigger_us": 10.0,
@@ -92,7 +94,7 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 40.0,
+    "delta_nll_cut": 10.0,
     "min_spacing_us": 2.0,
     "min_amplitude_pe": 5.0,
     "max_amplitude_pe": 400.0,
@@ -110,7 +112,7 @@
     "enable_local_evidence": true,
     "local_evidence_pre_us": 0.5,
     "local_evidence_post_us": 2.0,
-    "local_delta_nll_cut": 35.0,
+    "local_delta_nll_cut": 7.0,
     "debug": false
   },
   "coincidence_settings": {

@@ -1,6 +1,7 @@
 #include "ucn/app/WindowedPulseProcessor.hpp"
 #include "ucn/inference/GreedyLRTFitter.hpp"
 #include "ucn/templates/GaussianTripPulseTemplate.hpp"
+#include "ucn/templates/GaussianQuadPulseTemplate.hpp"
 #include "ucn/io/AnalysisConfig.hpp"
 #include <iostream>
 #include <iomanip>
@@ -36,7 +37,7 @@ int main(int argc, char** argv) {
     try {
         ucn::io::AnalysisConfig cfg = ucn::io::load_analysis_config(argv[1]);
         
-        ucn::GaussianTripPulseTemplate pulse_template(
+        ucn::GaussianQuadPulseTemplate pulse_template(
             cfg.template_config.native_bin_width_us,
             cfg.template_config.support_end_us,
             cfg.template_config.baseline,
@@ -46,7 +47,8 @@ int main(int argc, char** argv) {
             cfg.template_config.tail_start_us,
             cfg.template_config.a1, cfg.template_config.tau1,
             cfg.template_config.a2, cfg.template_config.tau2,
-            cfg.template_config.a3, cfg.template_config.tau3
+            cfg.template_config.a3, cfg.template_config.tau3,
+            cfg.template_config.a4, cfg.template_config.tau4
         );
 
         ucn::GreedyLRTFitter fitter(pulse_template);

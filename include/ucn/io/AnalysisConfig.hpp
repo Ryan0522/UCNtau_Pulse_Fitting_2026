@@ -28,6 +28,8 @@ struct PulseTemplateConfig {
     double tau2 = 0.0;
     double a3 = 0.0;
     double tau3 = 0.0;
+    double a4 = 0.0;
+    double tau4 = 0.0;
 };
 
 struct RunWindow {

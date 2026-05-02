@@ -178,6 +178,8 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.template_config.tau2 = get_or<double>(t, "tau2", 0.0);
         cfg.template_config.a3 = get_or<double>(t, "a3", 0.0);
         cfg.template_config.tau3 = get_or<double>(t, "tau3", 0.0);
+        cfg.template_config.a4 = get_or<double>(t, "a4", 0.0);
+        cfg.template_config.tau4 = get_or<double>(t, "tau4", 0.0);
     }
 
     if (j.contains("region_settings")) {

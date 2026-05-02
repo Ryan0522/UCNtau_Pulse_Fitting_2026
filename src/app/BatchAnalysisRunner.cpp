@@ -4,6 +4,7 @@
 #include "ucn/inference/CoincidenceFitter.hpp"
 #include "ucn/io/RootRunLoader.hpp"
 #include "ucn/templates/GaussianTripPulseTemplate.hpp"
+#include "ucn/templates/GaussianQuadPulseTemplate.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -15,6 +16,9 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <cstdint>
+#include <map>
+#include <tuple>
 
 namespace fs = std::filesystem;
 
@@ -157,11 +161,19 @@ void write_tail_pulse_header(std::ofstream& out) {
            "window_end_us,n_raw_hits\n";
 }
 
-void write_tail_waveform_header(std::ofstream& out, int n_bins) {
-    out << "tail_id,run,segment,hold_time_s,region,pulse_index_in_region,"
-           "pulse_time_us,amplitude_pe,window_index,window_width_us,"
-           "is_pileup,uses_fine_bins,bin_width_us,window_start_us,"
-           "window_end_us,n_raw_hits";
+constexpr double kTailPeBinWidth = 1.0;
+using TailSumKey = std::tuple<std::string, std::string, int>; // segment, region, pe_bin
+struct TailSumRow {
+    long long n_events = 0;
+    long long n_raw_hits = 0;
+    double amp_sum = 0.0;
+    std::vector<std::uint64_t> counts;
+};
+using TailSumMap = std::map<TailSumKey, TailSumRow>;
+
+void write_tail_sum_header(std::ofstream& out, int n_bins) {
+    out << "segment,region,pe_bin,pe_low,pe_high,"
+           "n_events,n_raw_hits,amp_sum,amp_mean";
 
     const char old_fill = out.fill();
 
@@ -170,6 +182,42 @@ void write_tail_waveform_header(std::ofstream& out, int n_bins) {
     }
 
     out << std::setfill(old_fill) << '\n';
+}
+
+void write_tail_sums(std::ofstream& out,
+                     const TailSumMap& sums,
+                     int n_bins) {
+    for (const auto& kv : sums) {
+        const auto& key = kv.first;
+        const TailSumRow& row = kv.second;
+
+        const std::string& segment = std::get<0>(key);
+        const std::string& region = std::get<1>(key);
+        const int pe_bin = std::get<2>(key);
+
+        const double pe_low = static_cast<double>(pe_bin) * kTailPeBinWidth;
+        const double pe_high = static_cast<double>(pe_bin + 1) * kTailPeBinWidth;
+        const double amp_mean =
+            row.n_events > 0 ? row.amp_sum / static_cast<double>(row.n_events) : 0.0;
+        
+        out << segment << ','
+            << region << ','
+            << pe_bin << ','
+            << pe_low << ','
+            << pe_high << ','
+            << row.n_events << ','
+            << row.n_raw_hits << ','
+            << std::setprecision(17) << row.amp_sum << ','
+            << amp_mean;
+
+        for (int b = 0; b < n_bins; ++b) {
+            const std::uint64_t c =
+                b < static_cast<int>(row.counts.size()) ? row.counts[static_cast<std::size_t>(b)] : 0;
+            out << ',' << c;
+        }
+
+        out << '\n';
+    }
 }
 
 void append_tagged_pulses(std::ofstream& out,
@@ -276,15 +324,15 @@ bool has_nearby_fitted_pulse(const std::vector<TaggedPulse>& pulses, std::size_t
     return false;
 }
 
-void append_tail_waveforms(std::ofstream& tail_pulses_out,
-                           std::ofstream& tail_waveforms_out,
-                           const std::string& run_id,
-                           const std::string& segment,
-                           double hold_time_s,
-                           const std::string& region_name,
-                           const std::vector<Hit>& raw_hits,
-                           const std::vector<TaggedPulse>& pulses,
-                           const io::TailExtractionSettings& settings) {
+void accumulate_tail_waveforms(std::ofstream& tail_pulses_out,
+                               TailSumMap& tail_sums,
+                               const std::string& run_id,
+                               const std::string& segment,
+                               double hold_time_s,
+                               const std::string& region_name,
+                               const std::vector<Hit>& raw_hits,
+                               const std::vector<TaggedPulse>& pulses,
+                               const io::TailExtractionSettings& settings) {
     if (!settings.enable) return;
     if (!tail_region_enabled(settings, region_name)) return;
     if (settings.bin_width_us <= 0.0 || settings.window_us <= 0.0) return;
@@ -303,20 +351,34 @@ void append_tail_waveforms(std::ofstream& tail_pulses_out,
         const double window_start_us = p.time_us - settings.pretrigger_us;
         const double window_end_us = window_start_us + static_cast<double>(n_bins) * settings.bin_width_us;
 
-        std::vector<int> counts(static_cast<std::size_t>(n_bins), 0);
+        const int pe_bin = static_cast<int>(std::floor(p.amplitude_pe / kTailPeBinWidth));
+        if (pe_bin < 0) continue;
 
+        TailSumKey key{segment, region_name, pe_bin};
+        TailSumRow& row = tail_sums[key];
+
+        if (row.counts.empty()) {
+            row.counts.assign(static_cast<std::size_t>(n_bins), 0);
+        } else if (static_cast<int>(row.counts.size()) != n_bins) {
+            throw std::runtime_error("Tail sum row has inconsistent n_bins.");
+        }
+        
         auto first = std::lower_bound(
             raw_hits.begin(), raw_hits.end(), window_start_us, [](const Hit& h, double t) { return h.time_us < t; }
         );
 
-        int n_raw_hits = 0;
+        int n_raw_hits_this_tail = 0;
         for (auto it = first; it != raw_hits.end() && it->time_us < window_end_us; ++it) {
             const int bin = static_cast<int>((it->time_us - window_start_us) / settings.bin_width_us);
             if (bin >= 0 && bin < n_bins) {
-                counts[static_cast<std::size_t>(bin)] += 1;
-                ++n_raw_hits;
+                row.counts[static_cast<std::size_t>(bin)] += 1;
+                ++n_raw_hits_this_tail;
             }
         }
+
+        row.n_events += 1;
+        row.n_raw_hits += n_raw_hits_this_tail;
+        row.amp_sum += p.amplitude_pe;
 
         std::ostringstream id;
         id << run_id << '_' << segment << '_' << region_name << '_'
@@ -339,30 +401,7 @@ void append_tail_waveforms(std::ofstream& tail_pulses_out,
                         << settings.bin_width_us << ','
                         << window_start_us << ','
                         << window_end_us << ','
-                        << n_raw_hits << '\n';
-        
-        tail_waveforms_out << tail_id << ','
-                           << run_id << ','
-                           << segment << ','
-                           << std::setprecision(17) << hold_time_s << ','
-                           << region_name << ','
-                           << ip << ','
-                           << p.time_us << ','
-                           << p.amplitude_pe << ','
-                           << p.window_index << ','
-                           << p.window_width_us << ','
-                           << (p.is_pileup ? 1 : 0) << ','
-                           << (p.uses_fine_bins ? 1 : 0) << ','
-                           << settings.bin_width_us << ','
-                           << window_start_us << ','
-                           << window_end_us << ','
-                           << n_raw_hits;
-
-        for (int b = 0; b < n_bins; ++b) {
-            tail_waveforms_out << ',' << counts[static_cast<std::size_t>(b)];
-        }
-
-        tail_waveforms_out << '\n';
+                        << n_raw_hits_this_tail << '\n';
     }
 }
 
@@ -381,13 +420,13 @@ void BatchAnalysisRunner::run() const {
         cfg_.num_shards
     );
 
-    const fs::path metadata_path       = out_dir / "analysis_metadata.json";
-    const fs::path summary_path        = out_dir / "run_segment_summary.csv";
-    const fs::path pulses_path         = out_dir / "all_pulses.csv";
-    const fs::path windows_path        = out_dir / "all_windows.csv";
-    const fs::path coincidences_path   = out_dir / "all_coincidences.csv";
-    const fs::path tail_pulses_path    = out_dir / "all_tail_pulses.csv";
-    const fs::path tail_waveforms_path = out_dir / "all_tail_waveforms.csv";
+    const fs::path metadata_path     = out_dir / "analysis_metadata.json";
+    const fs::path summary_path      = out_dir / "run_segment_summary.csv";
+    const fs::path pulses_path       = out_dir / "all_pulses.csv";
+    const fs::path windows_path      = out_dir / "all_windows.csv";
+    const fs::path coincidences_path = out_dir / "all_coincidences.csv";
+    const fs::path tail_pulses_path  = out_dir / "all_tail_pulses.csv";
+    const fs::path tail_sums_path    = out_dir / "all_tail_sums_by_pe.csv";
 
     std::ofstream meta_out(metadata_path);
 
@@ -408,7 +447,9 @@ void BatchAnalysisRunner::run() const {
     std::ofstream windows_out(windows_path);
     std::ofstream coincidences_out(coincidences_path);
     std::ofstream tail_pulses_out;
-    std::ofstream tail_waveforms_out;
+    TailSumMap tail_sums;
+    int tail_n_bins = 0;
+
     if (cfg_.tail_extraction.enable) {
         if (cfg_.tail_extraction.bin_width_us <= 0.0 || cfg_.tail_extraction.window_us <= 0.0) {
             throw std::runtime_error(
@@ -416,7 +457,7 @@ void BatchAnalysisRunner::run() const {
             );
         }
 
-        const int tail_n_bins = static_cast<int>(
+        tail_n_bins = static_cast<int>(
             std::ceil(cfg_.tail_extraction.window_us /
                     cfg_.tail_extraction.bin_width_us)
         );
@@ -426,14 +467,12 @@ void BatchAnalysisRunner::run() const {
         }
 
         tail_pulses_out.open(tail_pulses_path);
-        tail_waveforms_out.open(tail_waveforms_path);
 
-        if (!tail_pulses_out.is_open() || !tail_waveforms_out.is_open()) {
-            throw std::runtime_error("Could not open tail waveform output CSV files.");
+        if (!tail_pulses_out.is_open()) {
+            throw std::runtime_error("Could not open tail pulse metadata CSV file.");
         }
 
         write_tail_pulse_header(tail_pulses_out);
-        write_tail_waveform_header(tail_waveforms_out, tail_n_bins);
     }
 
     if (!summary_out.is_open() || !pulses_out.is_open() || !windows_out.is_open() || !coincidences_out.is_open()) {
@@ -445,7 +484,7 @@ void BatchAnalysisRunner::run() const {
     write_window_header(windows_out);
     write_coincidence_header(coincidences_out);
 
-    GaussianTripPulseTemplate pulse_template(
+    GaussianQuadPulseTemplate pulse_template(
         cfg_.template_config.native_bin_width_us,
         cfg_.template_config.support_end_us,
         cfg_.template_config.baseline,
@@ -455,7 +494,8 @@ void BatchAnalysisRunner::run() const {
         cfg_.template_config.tail_start_us,
         cfg_.template_config.a1, cfg_.template_config.tau1,
         cfg_.template_config.a2, cfg_.template_config.tau2,
-        cfg_.template_config.a3, cfg_.template_config.tau3
+        cfg_.template_config.a3, cfg_.template_config.tau3,
+        cfg_.template_config.a4, cfg_.template_config.tau4
     );
 
     GreedyLRTFitter fitter(pulse_template);
@@ -583,9 +623,9 @@ void BatchAnalysisRunner::run() const {
                 );
 
                 if (cfg_.tail_extraction.enable) {
-                    append_tail_waveforms(
+                    accumulate_tail_waveforms(
                         tail_pulses_out,
-                        tail_waveforms_out,
+                        tail_sums,
                         loaded.run_id,
                         seg.segment_name,
                         hold_time_s,
@@ -595,9 +635,9 @@ void BatchAnalysisRunner::run() const {
                         cfg_.tail_extraction
                     );
 
-                    append_tail_waveforms(
+                    accumulate_tail_waveforms(
                         tail_pulses_out,
-                        tail_waveforms_out,
+                        tail_sums,
                         loaded.run_id,
                         seg.segment_name,
                         hold_time_s,
@@ -607,9 +647,9 @@ void BatchAnalysisRunner::run() const {
                         cfg_.tail_extraction
                     );
 
-                    append_tail_waveforms(
+                    accumulate_tail_waveforms(
                         tail_pulses_out,
-                        tail_waveforms_out,
+                        tail_sums,
                         loaded.run_id,
                         seg.segment_name,
                         hold_time_s,
@@ -620,7 +660,6 @@ void BatchAnalysisRunner::run() const {
                     );
 
                     tail_pulses_out.flush();
-                    tail_waveforms_out.flush();
                 }
 
                 summary_out.flush();
@@ -650,6 +689,16 @@ void BatchAnalysisRunner::run() const {
         }
     }
 
+    if (cfg_.tail_extraction.enable) {
+        std::ofstream tail_sums_out(tail_sums_path);
+        if (!tail_sums_out.is_open()) {
+            throw std::runtime_error("Could not open tail summed waveform CSV file.");
+        }
+
+        write_tail_sum_header(tail_sums_out, tail_n_bins);
+        write_tail_sums(tail_sums_out, tail_sums, tail_n_bins);
+    }
+
     std::cout << "Finished shard " << cfg_.shard_index << " / " << cfg_.num_shards << ".\n"
               << "  Runs processed: " << n_runs_processed << '\n'
               << "  Runs failed:    " << n_runs_failed << '\n'
@@ -657,7 +706,7 @@ void BatchAnalysisRunner::run() const {
               << "  Pulses:         " << pulses_path << '\n'
               << "  Windows:        " << windows_path << '\n'
               << "  Tail pulses:    " << tail_pulses_path << '\n'
-              << "  Tail waveforms: " << tail_waveforms_path << '\n';
+              << "  Tail sums:      " << tail_sums_path << '\n';
 }
 
 } // namespace ucn::app
