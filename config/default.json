@@ -37,22 +37,23 @@
   },
   "segment_order": ["12", "34", "56", "78"],
 
+  
   "template_config": {
     "native_bin_width_us": 0.5,
     "support_end_us": 500.0,
     "baseline": 0.0,
-    "gauss_amp": 0.541686328,
+    "gauss_amp": 0.561636533,
     "gauss_mu": 0.0,
-    "gauss_sigma": 0.117371,
+    "gauss_sigma": 0.1011652274,
     "tail_start_us": 0.0,
-    "a1": 0.155684,
-    "tau1": 1.152482,
-    "a2": 0.047826,
-    "tau2": 6.189503,
-    "a3": 0.007353,
-    "tau3": 31.889925,
-    "a4": 0.000684,
-    "tau4": 225.223018
+    "a1": 0.1523423331,
+    "tau1": 1.169027829,
+    "a2": 0.06886784927,
+    "tau2": 5.097039768,
+    "a3": 0.01326738387,
+    "tau3": 25.82401894,
+    "a4": 0.001010116652,
+    "tau4": 216.821855
   },
 
   "region_settings": {
@@ -85,7 +86,7 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 10.0,
+    "delta_nll_cut": 5.0,
     "min_spacing_us": 2.0,
     "min_amplitude_pe": 5.0,
     "max_amplitude_pe": 400.0,
@@ -102,7 +103,7 @@
     "close_reg_eta": 0.10,
     "close_reg_floor_pe": 1.0,
 
-    "enable_local_evidence": true,
+    "enable_local_evidence": false,
     "local_evidence_pre_us": 0.5,
     "local_evidence_post_us": 2.0,
     "local_delta_nll_cut": 7.0,
