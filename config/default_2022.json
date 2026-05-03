@@ -5,7 +5,7 @@
   "restrict_to_good_runs": true,
 
   "data_folder": "../UCNtau_2022_raw_data/",
-  "output_folder": "./output/",
+  "output_folder": "./output/2022",
   "runinfo_path": "./config/betteroutput2022.json",
   "good_runs_path": "./config/2022runlist.txt",
 
@@ -41,11 +41,11 @@
   "template_config": {
     "native_bin_width_us": 0.5,
     "support_end_us": 500.0,
-    "baseline": 0.0,
+    "baseline": 5.730238653e-8,
     "gauss_amp": 0.561636533,
-    "gauss_mu": 0.0,
+    "gauss_mu": 0.34228525,
     "gauss_sigma": 0.1011652274,
-    "tail_start_us": 0.0,
+    "tail_start_us": 0.07688788,
     "a1": 0.1523423331,
     "tau1": 1.169027829,
     "a2": 0.06886784927,
@@ -86,7 +86,7 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 5.0,
+    "delta_nll_cut": 10.0,
     "min_spacing_us": 2.0,
     "min_amplitude_pe": 5.0,
     "max_amplitude_pe": 400.0,
@@ -103,7 +103,7 @@
     "close_reg_eta": 0.10,
     "close_reg_floor_pe": 1.0,
 
-    "enable_local_evidence": false,
+    "enable_local_evidence": true,
     "local_evidence_pre_us": 0.5,
     "local_evidence_post_us": 2.0,
     "local_delta_nll_cut": 7.0,

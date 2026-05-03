@@ -116,8 +116,8 @@ std::string make_array_subdir_name(const io::AnalysisConfig& cfg) {
 fs::path make_output_dir(const io::AnalysisConfig& cfg) {
     fs::path out_dir = fs::path(cfg.output_folder);
 
+    out_dir /= make_array_subdir_name(cfg);
     if (cfg.num_shards > 1) {
-        out_dir /= make_array_subdir_name(cfg);
         out_dir /= shard_name(cfg.shard_index);
     }
 
