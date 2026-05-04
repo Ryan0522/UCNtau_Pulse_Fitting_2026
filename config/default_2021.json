@@ -1,7 +1,7 @@
 {
   "year": 2021,
-  "start_run": 21606,
-  "end_run": 26001,
+  "start_run": 21599,
+  "end_run": 22401,
   "restrict_to_good_runs": true,
 
   "data_folder": "../UCNtau_2021_raw_data/",
@@ -18,7 +18,7 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "quad_20nll_500us",
+  "array_output_subdir": "quad_5nll_500us_epoch1",
   "shard_index": 0,
   "num_shards": 1,
 
@@ -36,19 +36,19 @@
   "template_config": {
     "native_bin_width_us": 0.5,
     "support_end_us": 500.0,
-    "baseline": 1.26e-5,
-    "gauss_amp": 0.34904,
-    "gauss_mu": 0.4104,
-    "gauss_sigma": 0.1738,
-    "tail_start_us": -0.1712,
-    "a1": 0.0921,
-    "tau1": 1.396,
-    "a2": 0.0197,
-    "tau2": 6.748,
-    "a3": 0.00298,
-    "tau3": 32.05,
-    "a4": 0.000326,
-    "tau4": 203.8
+    "baseline": 8.504228955e-6,
+    "gauss_amp": 0.2420314758,
+    "gauss_mu": 0.4064614705,
+    "gauss_sigma": 0.1543758604,
+    "tail_start_us": -0.1220889594,
+    "a1": 0.07939320577,
+    "tau1": 1.566142061,
+    "a2": 0.01841437504,
+    "tau2": 7.473596365,
+    "a3": 0.002872307028,
+    "tau3": 34.92290144,
+    "a4": 0.0003348007669,
+    "tau4": 229.3305418
   },
 
   "region_settings": {
@@ -81,7 +81,7 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 10.0,
+    "delta_nll_cut": 5.0,
     "min_spacing_us": 2.0,
     "min_amplitude_pe": 5.0,
     "max_amplitude_pe": 400.0,
@@ -101,7 +101,7 @@
     "enable_local_evidence": true,
     "local_evidence_pre_us": 0.5,
     "local_evidence_post_us": 2.0,
-    "local_delta_nll_cut": 14.0,
+    "local_delta_nll_cut": 4.0,
 
     "debug": false
   },
