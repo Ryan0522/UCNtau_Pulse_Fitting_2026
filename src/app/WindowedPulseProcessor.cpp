@@ -6,6 +6,7 @@
 #include <numeric>
 #include <iostream>
 #include <iomanip>
+#include <chrono>
 
 namespace ucn {
 namespace {
@@ -33,6 +34,10 @@ WindowedPulseProcessor::WindowedPulseProcessor(const PulseTemplate& pulse_templa
 
 void WindowedPulseProcessor::set_debug_max_windows(int n) {
     debug_max_windows_ = n;
+}
+
+void WindowedPulseProcessor::set_progress_enabled(bool enabled) {
+    progress_enabled_ = enabled;
 }
 
 std::vector<Hit> WindowedPulseProcessor::select_hits(const std::vector<Hit>& hits,
@@ -197,6 +202,13 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
     int i = 0;
     int window_index = 0;
     int debug_window_count = 0;
+
+    const double stream_start_us = hits.empty() ? 0.0 : hits.front().time_us;
+    const double stream_end_us   = hits.empty() ? 0.0 : hits.back().time_us;
+    const double stream_width_s  = std::max(1.0e-12, (stream_end_us - stream_start_us) * 1.0e-6);
+
+    int last_report_second = -1;    
+    
     while (i < static_cast<int>(hits.size())) {
         if (debug_max_windows_ >= 0 && debug_window_count >= debug_max_windows_) {
             if (region_settings.debug) {
@@ -254,6 +266,32 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
                                                            end_time_us,
                                                            bin_width_us,
                                                            region_settings);
+
+        if (progress_enabled_) {
+            const double reached_s =
+                (end_time_us - stream_start_us) * 1.0e-6;
+
+            const double percent =
+                100.0 * reached_s / stream_width_s;
+
+            const int report_second =
+                static_cast<int>(std::floor(reached_s));
+
+            if (report_second > last_report_second || end_time_us >= stream_end_us) {
+                last_report_second = report_second;
+
+                std::cerr << std::fixed << std::setprecision(2)
+                        << "\r[fit_stream] reached "
+                        << reached_s << " / " << stream_width_s << " s"
+                        << " (" << percent << "%)"
+                        << " | window=" << window_index
+                        << " | width_us=" << (end_time_us - start_time_us)
+                        << " | hits=" << next_index << "/" << hits.size()
+                        << " | seeds=" << seeds.size()
+                        << std::flush;
+            }
+        }
+
         if (seeds.empty()) {
             i = next_index;
             ++window_index;
@@ -295,7 +333,38 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
         window_fit_settings.background_per_bin = background_rate_hz * bin_width_us * 1.0e-6;
         window_fit_settings.fixed_expected = fixed_expected;
 
+        if (progress_enabled_) {
+            if (end_time_us - start_time_us > 4000) {
+                std::cerr << std::fixed << std::setprecision(3)
+                        << "\n[fit_stream] fitting large window=" << window_index
+                        << " start_s=" << (start_time_us - stream_start_us) * 1.0e-6
+                        << " end_s=" << (end_time_us - stream_start_us) * 1.0e-6
+                        << " width_us=" << (end_time_us - start_time_us)
+                        << " n_bins=" << histogram.counts.size()
+                        << " n_hits=" << (next_index - i)
+                        << " n_seeds=" << seeds.size()
+                        << "\n";
+            }
+        }
+
+        auto fit_t0 = std::chrono::steady_clock::now();
+
         FitResult fit = fitter_.fit(histogram, seeds, window_fit_settings);
+
+        auto fit_t1 = std::chrono::steady_clock::now();
+
+        if (progress_enabled_) {
+            if (end_time_us - start_time_us > 4000) {
+                const double fit_seconds =
+                    std::chrono::duration<double>(fit_t1 - fit_t0).count();
+
+                std::cerr << "[fit_stream] done window=" << window_index
+                        << " fit_time_s=" << fit_seconds
+                        << " n_pulses=" << fit.pulses.size()
+                        << "\n";
+            }
+        }
+
         if (fit.pulses.empty()) {
             i = next_index;
             ++window_index;
@@ -366,6 +435,12 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
 
         i = next_index;
         ++window_index;
+    }
+
+    if (progress_enabled_) {
+        std::cerr << "\n[fit_stream] finished. windows=" << window_index
+                << " pulses_out=" << output_pulses.size()
+                << "\n";
     }
 }
 

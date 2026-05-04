@@ -26,6 +26,8 @@ public:
                          const RegionSettings& region_settings,
                          const FitSettings& fit_settings) const;
 
+    void set_progress_enabled(bool enabled);
+
 private:
     std::vector<Hit> select_hits(const std::vector<Hit>& hits,
                                  double start_us,
@@ -59,6 +61,8 @@ private:
     const PulseTemplate& pulse_template_;
     const GreedyLRTFitter& fitter_;
     int debug_max_windows_ = -1;
+
+    bool progress_enabled_ = false;
 };
 
 } // namespace ucn
