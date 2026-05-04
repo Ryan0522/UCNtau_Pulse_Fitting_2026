@@ -15,6 +15,7 @@ using json = nlohmann::json;
 struct PulseTemplateConfig {
     double native_bin_width_us = 0.5;
     double support_end_us = 100.0;
+    bool use_smooth_tail_onset = false;
 
     // Triple Exponential / GaussianTrip Parameters
     double baseline = 0.0;
@@ -22,6 +23,7 @@ struct PulseTemplateConfig {
     double gauss_mu = 0.0;
     double gauss_sigma = 0.0;
     double tail_start_us = 0.0;
+    double tail_width_us=1.0e-6;
     double a1 = 0.0;
     double tau1 = 0.0;
     double a2 = 0.0;

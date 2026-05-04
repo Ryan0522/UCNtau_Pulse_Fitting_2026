@@ -167,11 +167,14 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<double>(t, "native_bin_width_us", cfg.template_config.native_bin_width_us);
         cfg.template_config.support_end_us =
             get_or<double>(t, "support_end_us", cfg.template_config.support_end_us);
+        cfg.template_config.use_smooth_tail_onset = 
+            get_or<bool>(t, "use_smooth_tail_onset", cfg.template_config.use_smooth_tail_onset);
         cfg.template_config.baseline = get_or<double>(t, "baseline", 0.0);
         cfg.template_config.gauss_amp = get_or<double>(t, "gauss_amp", 0.0);
         cfg.template_config.gauss_mu = get_or<double>(t, "gauss_mu", 0.0);
         cfg.template_config.gauss_sigma = get_or<double>(t, "gauss_sigma", 0.0);
         cfg.template_config.tail_start_us = get_or<double>(t, "tail_start_us", 0.0);
+        cfg.template_config.tail_width_us = get_or<double>(t, "tail_width_us", cfg.template_config.tail_width_us);
         cfg.template_config.a1 = get_or<double>(t, "a1", 0.0);
         cfg.template_config.tau1 = get_or<double>(t, "tau1", 0.0);
         cfg.template_config.a2 = get_or<double>(t, "a2", 0.0);
@@ -180,6 +183,10 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.template_config.tau3 = get_or<double>(t, "tau3", 0.0);
         cfg.template_config.a4 = get_or<double>(t, "a4", 0.0);
         cfg.template_config.tau4 = get_or<double>(t, "tau4", 0.0);
+
+        if (cfg.template_config.tail_width_us <= 0.0) {
+            throw std::runtime_error("template_config.tail_width_us must be > 0");
+        }
     }
 
     if (j.contains("region_settings")) {

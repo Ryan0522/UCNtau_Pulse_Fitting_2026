@@ -40,11 +40,13 @@ int main(int argc, char** argv) {
         ucn::GaussianQuadPulseTemplate pulse_template(
             cfg.template_config.native_bin_width_us,
             cfg.template_config.support_end_us,
+            cfg.template_config.use_smooth_tail_onset,
             cfg.template_config.baseline,
             cfg.template_config.gauss_amp,
             cfg.template_config.gauss_mu,
             cfg.template_config.gauss_sigma,
             cfg.template_config.tail_start_us,
+            cfg.template_config.tail_width_us,
             cfg.template_config.a1, cfg.template_config.tau1,
             cfg.template_config.a2, cfg.template_config.tau2,
             cfg.template_config.a3, cfg.template_config.tau3,

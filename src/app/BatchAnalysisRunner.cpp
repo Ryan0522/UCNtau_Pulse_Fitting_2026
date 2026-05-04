@@ -487,11 +487,13 @@ void BatchAnalysisRunner::run() const {
     GaussianQuadPulseTemplate pulse_template(
         cfg_.template_config.native_bin_width_us,
         cfg_.template_config.support_end_us,
+        cfg_.template_config.use_smooth_tail_onset,
         cfg_.template_config.baseline,
         cfg_.template_config.gauss_amp,
         cfg_.template_config.gauss_mu,
         cfg_.template_config.gauss_sigma,
         cfg_.template_config.tail_start_us,
+        cfg_.template_config.tail_width_us,
         cfg_.template_config.a1, cfg_.template_config.tau1,
         cfg_.template_config.a2, cfg_.template_config.tau2,
         cfg_.template_config.a3, cfg_.template_config.tau3,

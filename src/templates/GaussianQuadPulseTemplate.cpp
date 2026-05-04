@@ -8,13 +8,15 @@ namespace ucn
 {
        
 GaussianQuadPulseTemplate::GaussianQuadPulseTemplate(
-double native_bin_width_us, double support_end_us,
+double native_bin_width_us, double support_end_us, bool use_smooth_tail_onset,
     double baseline, double gauss_amp, double gauss_mu, double gauss_sigma,
-    double tail_start_us,
+    double tail_start_us, double tail_width_us,
     double a1, double tau1, double a2, double tau2, double a3, double tau3, double a4, double tau4)
     : native_bin_width_us_(native_bin_width_us), support_end_us_(support_end_us),
+      use_smooth_tail_onset_(use_smooth_tail_onset),
       c_(baseline), Ag_(gauss_amp), mu_g_(gauss_mu), sigma_g_(gauss_sigma),
-      t0_(tail_start_us), A1_(a1), tau1_(tau1), A2_(a2), tau2_(tau2), 
+      t0_(tail_start_us), tail_width_us_(tail_width_us),
+      A1_(a1), tau1_(tau1), A2_(a2), tau2_(tau2), 
       A3_(a3), tau3_(tau3), A4_(a4), tau4_(tau4)
 {
     normalization_factor_ = analytic_integral(support_end_us_) - analytic_integral(0.0);
@@ -33,14 +35,29 @@ double native_bin_width_us, double support_end_us,
     }
 }
 
+double GaussianQuadPulseTemplate::tail_gate(double t) const {
+    if (!use_smooth_tail_onset_) return (t >= t0_) ? 1.0 : 0.0;
+    
+    const double x = (t - t0_) / tail_width_us_;
+
+    if (x > 50.0) return 1.0;
+    if (x < -50.0) return 0.0;
+
+    return 1.0 / (1.0 + std::exp(-x));
+}
+
 double GaussianQuadPulseTemplate::shape_unnormalized(double t) const {
     double val = c_ + Ag_ * std::exp(-0.5 * std::pow((t - mu_g_) / sigma_g_, 2));
-    if (t >= t0_) {
-        val += A1_ * std::exp(-(t - t0_) / tau1_);
-        val += A2_ * std::exp(-(t - t0_) / tau2_);
-        val += A3_ * std::exp(-(t - t0_) / tau3_);
-        val += A4_ * std::exp(-(t - t0_) / tau4_);
-    }
+    
+    const double dt = std::max(t - t0_, 0.0);
+    const double gate = tail_gate(t);
+    
+    val += gate * (
+        A1_ * std::exp(-dt / tau1_) +
+        A2_ * std::exp(-dt / tau2_) +
+        A3_ * std::exp(-dt / tau3_) +
+        A4_ * std::exp(-dt / tau4_)
+    );
     return val;
 }
 
