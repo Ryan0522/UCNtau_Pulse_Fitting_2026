@@ -5,6 +5,7 @@
 #include "ucn/io/RootRunLoader.hpp"
 #include "ucn/templates/GaussianTripPulseTemplate.hpp"
 #include "ucn/templates/GaussianQuadPulseTemplate.hpp"
+#include "ucn/templates/EmpiricalPulseTemplate.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -19,6 +20,7 @@
 #include <cstdint>
 #include <map>
 #include <tuple>
+#include <memory>
 
 namespace fs = std::filesystem;
 
@@ -26,36 +28,36 @@ namespace ucn::app {
 
 namespace {
 
-bool run_is_allowed(const io::AnalysisConfig& cfg, int run_number) {
-    if (!cfg.restrict_to_good_runs || cfg.good_runs.empty()) {
+bool run_is_allowed(const io::AnalysisConfig& cfg_, int run_number) {
+    if (!cfg_.restrict_to_good_runs || cfg_.good_runs.empty()) {
         return true;
     }
-    return cfg.good_runs.count(std::to_string(run_number)) > 0;
+    return cfg_.good_runs.count(std::to_string(run_number)) > 0;
 }
 
-bool run_is_production(const io::AnalysisConfig& cfg, int run_number) {
-    if (cfg.runinfo_json.empty()) return true;
+bool run_is_production(const io::AnalysisConfig& cfg_, int run_number) {
+    if (cfg_.runinfo_json.empty()) return true;
 
     const std::string run_key = std::to_string(run_number);
-    if (!cfg.runinfo_json.contains(run_key)) return false;
+    if (!cfg_.runinfo_json.contains(run_key)) return false;
 
-    const auto& r = cfg.runinfo_json.at(run_key);
+    const auto& r = cfg_.runinfo_json.at(run_key);
     if (!r.contains("run_type")) return false;
 
     return r.at("run_type").get<std::string>() == "production";
 }
 
-double get_runinfo_number_or(const io::AnalysisConfig& cfg,
+double get_runinfo_number_or(const io::AnalysisConfig& cfg_,
                              int run_number,
                              const std::vector<std::string>& keys,
                              double fallback) 
 {
-    if (cfg.runinfo_json.empty()) return fallback;
+    if (cfg_.runinfo_json.empty()) return fallback;
 
     const std::string run_key = std::to_string(run_number);
-    if (!cfg.runinfo_json.contains(run_key)) return fallback;
+    if (!cfg_.runinfo_json.contains(run_key)) return fallback;
 
-    const auto& r = cfg.runinfo_json.at(run_key);
+    const auto& r = cfg_.runinfo_json.at(run_key);
     for (const std::string& key : keys) {
         if (r.contains(key) && r.at(key).is_number()) return r.at(key).get<double>();
     }
@@ -63,12 +65,12 @@ double get_runinfo_number_or(const io::AnalysisConfig& cfg,
     return fallback;
 }
 
-std::vector<int> build_selected_run_list(const io::AnalysisConfig& cfg) {
+std::vector<int> build_selected_run_list(const io::AnalysisConfig& cfg_) {
     std::vector<int> runs;
     
-    for (int run = cfg.start_run; run <= cfg.end_run; ++run) {
-        if (!run_is_allowed(cfg, run)) continue;
-        if (!run_is_production(cfg, run)) continue;
+    for (int run = cfg_.start_run; run <= cfg_.end_run; ++run) {
+        if (!run_is_allowed(cfg_, run)) continue;
+        if (!run_is_production(cfg_, run)) continue;
 
         runs.push_back(run);
     }
@@ -93,15 +95,15 @@ std::string shard_name(int shard_index) {
     return ss.str();
 }
 
-std::string make_array_subdir_name(const io::AnalysisConfig& cfg) {
-    if (!cfg.array_output_subdir.empty()) {
-        return cfg.array_output_subdir;
+std::string make_array_subdir_name(const io::AnalysisConfig& cfg_) {
+    if (!cfg_.array_output_subdir.empty()) {
+        return cfg_.array_output_subdir;
     }
 
-    const double pe = cfg.fit_settings.min_amplitude_pe;
-    const double nll = cfg.fit_settings.delta_nll_cut;
-    const double wt = cfg.region_settings.min_gap_us;
-    const double wc = cfg.region_settings.coincidence_window_us;
+    const double pe = cfg_.fit_settings.min_amplitude_pe;
+    const double nll = cfg_.fit_settings.delta_nll_cut;
+    const double wt = cfg_.region_settings.min_gap_us;
+    const double wc = cfg_.region_settings.coincidence_window_us;
 
     std::ostringstream ss;
     ss << "array"
@@ -113,12 +115,12 @@ std::string make_array_subdir_name(const io::AnalysisConfig& cfg) {
     return ss.str();
 }
 
-fs::path make_output_dir(const io::AnalysisConfig& cfg) {
-    fs::path out_dir = fs::path(cfg.output_folder);
+fs::path make_output_dir(const io::AnalysisConfig& cfg_) {
+    fs::path out_dir = fs::path(cfg_.output_folder);
 
-    out_dir /= make_array_subdir_name(cfg);
-    if (cfg.num_shards > 1) {
-        out_dir /= shard_name(cfg.shard_index);
+    out_dir /= make_array_subdir_name(cfg_);
+    if (cfg_.num_shards > 1) {
+        out_dir /= shard_name(cfg_.shard_index);
     }
 
     fs::create_directories(out_dir);
@@ -407,8 +409,8 @@ void accumulate_tail_waveforms(std::ofstream& tail_pulses_out,
 
 } // namespace
 
-BatchAnalysisRunner::BatchAnalysisRunner(const io::AnalysisConfig& cfg)
-    : cfg_(cfg) {}
+BatchAnalysisRunner::BatchAnalysisRunner(const io::AnalysisConfig& cfg_)
+    : cfg_(cfg_) {}
 
 void BatchAnalysisRunner::run() const {
     const fs::path out_dir = make_output_dir(cfg_);
@@ -484,24 +486,33 @@ void BatchAnalysisRunner::run() const {
     write_window_header(windows_out);
     write_coincidence_header(coincidences_out);
 
-    GaussianQuadPulseTemplate pulse_template(
-        cfg_.template_config.native_bin_width_us,
-        cfg_.template_config.support_end_us,
-        cfg_.template_config.use_smooth_tail_onset,
-        cfg_.template_config.baseline,
-        cfg_.template_config.gauss_amp,
-        cfg_.template_config.gauss_mu,
-        cfg_.template_config.gauss_sigma,
-        cfg_.template_config.tail_start_us,
-        cfg_.template_config.tail_width_us,
-        cfg_.template_config.a1, cfg_.template_config.tau1,
-        cfg_.template_config.a2, cfg_.template_config.tau2,
-        cfg_.template_config.a3, cfg_.template_config.tau3,
-        cfg_.template_config.a4, cfg_.template_config.tau4
-    );
+    std::unique_ptr<ucn::PulseTemplate> pulse_template;
+    if (cfg_.template_config.type == "empirical") {
+        pulse_template = std::make_unique<ucn::EmpiricalPulseTemplate>(
+            cfg_.template_config.native_bin_width_us,
+            cfg_.template_config.support_end_us,
+            cfg_.template_config.empirical_csv_path
+        );
+    } else {
+        pulse_template = std::make_unique<ucn::GaussianQuadPulseTemplate>(
+            cfg_.template_config.native_bin_width_us,
+            cfg_.template_config.support_end_us,
+            cfg_.template_config.use_smooth_tail_onset,
+            cfg_.template_config.baseline,
+            cfg_.template_config.gauss_amp,
+            cfg_.template_config.gauss_mu,
+            cfg_.template_config.gauss_sigma,
+            cfg_.template_config.tail_start_us,
+            cfg_.template_config.tail_width_us,
+            cfg_.template_config.a1, cfg_.template_config.tau1,
+            cfg_.template_config.a2, cfg_.template_config.tau2,
+            cfg_.template_config.a3, cfg_.template_config.tau3,
+            cfg_.template_config.a4, cfg_.template_config.tau4
+        );
+    }
 
-    GreedyLRTFitter fitter(pulse_template);
-    WindowedPulseProcessor processor(pulse_template, fitter);
+    GreedyLRTFitter fitter(*pulse_template);
+    WindowedPulseProcessor processor(*pulse_template, fitter);
     CoincidenceFitter coincidence_fitter(cfg_.coincidence_settings);
 
     std::cout << "Selected " << all_runs.size() << " production/good runs total.\n"

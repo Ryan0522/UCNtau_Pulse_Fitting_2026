@@ -45,7 +45,9 @@ private:
 
     double tail_gate(double t) const;
     double shape_unnormalized(double t_us) const;
-    double analytic_integral(double t_us) const;
+    double numeric_integral(double t0_us, double t1_us) const;
+    double analytic_integral(double t) const;
+    double raw_integral(double t0_us, double t1_us) const;
 };
     
 } // namespace ucn

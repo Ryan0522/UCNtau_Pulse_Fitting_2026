@@ -163,6 +163,12 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
 
     if (j.contains("template_config")) {
         const json& t = j.at("template_config");
+        cfg.template_config.type = get_or<std::string>(
+            t, "type", cfg.template_config.type
+        );
+        cfg.template_config.empirical_csv_path = get_or<std::string>(
+            t, "empirical_csv_path", cfg.template_config.empirical_csv_path
+        );
         cfg.template_config.native_bin_width_us =
             get_or<double>(t, "native_bin_width_us", cfg.template_config.native_bin_width_us);
         cfg.template_config.support_end_us =

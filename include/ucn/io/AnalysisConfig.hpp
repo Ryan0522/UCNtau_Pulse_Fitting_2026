@@ -13,6 +13,9 @@ namespace ucn::io {
 using json = nlohmann::json;
 
 struct PulseTemplateConfig {
+    std::string type = "gaussian_quad";
+    std::string empirical_csv_path = "";
+
     double native_bin_width_us = 0.5;
     double support_end_us = 100.0;
     bool use_smooth_tail_onset = false;

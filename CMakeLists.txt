@@ -33,6 +33,7 @@ add_library(ucn_core
     src/templates/DoubleExponentialPulseTemplate.cpp
     src/templates/GaussianTripPulseTemplate.cpp
     src/templates/GaussianQuadPulseTemplate.cpp
+    src/templates/EmpiricalPulseTemplate.cpp
     src/inference/Likelihood.cpp
     src/inference/GreedyLRTFitter.cpp
     src/inference/CoincidenceFitter.cpp
@@ -69,9 +70,13 @@ add_executable(run_batch_analysis
     apps/run_batch_analysis.cpp
 )
 add_executable(test_mc_csv apps/test_mc_csv.cpp)
+add_executable(extract_coincidence_pulse_shape
+    apps/extract_coincidence_pulse_shape.cpp
+)
 
 target_link_libraries(run_batch_analysis PRIVATE ucn_core)
 target_link_libraries(test_mc_csv PRIVATE ucn_core)
+target_link_libraries(extract_coincidence_pulse_shape PRIVATE ucn_core)
 
 # --- Testing Target ---
 if(UCN_BUILD_TESTS)

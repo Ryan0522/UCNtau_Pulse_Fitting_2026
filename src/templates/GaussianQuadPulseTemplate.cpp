@@ -61,6 +61,25 @@ double GaussianQuadPulseTemplate::shape_unnormalized(double t) const {
     return val;
 }
 
+double GaussianQuadPulseTemplate::numeric_integral(double t0_us, double t1_us) const {
+    if (t1_us <= t0_us) return 0.0;
+
+    const double lo = std::clamp(t0_us, 0.0, support_end_us_);
+    const double hi = std::clamp(t1_us, 0.0, support_end_us_);
+    if (hi <= lo) return 0.0;
+
+    const double dx = std::min(0.01, 0.02 * native_bin_width_us_);
+    const int n = std::max(1, static_cast<int>(std::ceil((hi - lo) / dx)));
+    const double h = (hi - lo) / n;
+
+    double sum = 0.0;
+    for (int k = 0; k < n; ++k) {
+        const double x_mid = lo + (k + 0.5) * h;
+        sum += shape_unnormalized(x_mid) * h;
+    }
+    return sum;
+}
+
 double GaussianQuadPulseTemplate::analytic_integral(double t) const {
     double term_c = c_ * t;
     double term_g = Ag_ * sigma_g_ * std::sqrt(M_PI / 2.0) * std::erf((t - mu_g_) / (sigma_g_ * std::sqrt(2.0)));
@@ -74,6 +93,13 @@ double GaussianQuadPulseTemplate::analytic_integral(double t) const {
     return term_c + term_g + term_exps;
 }
 
+double GaussianQuadPulseTemplate::raw_integral(double t0_us, double t1_us) const {
+    if (use_smooth_tail_onset_) {
+        return numeric_integral(t0_us, t1_us);
+    }
+    return analytic_integral(t1_us) - analytic_integral(t0_us);
+}
+
 double GaussianQuadPulseTemplate::integral(double t0_us, double t1_us) const {
     if (t1_us <= t0_us) return 0.0;
 
@@ -81,7 +107,7 @@ double GaussianQuadPulseTemplate::integral(double t0_us, double t1_us) const {
     const double hi = std::clamp(t1_us, 0.0, support_end_us_);
     if (hi <= lo) return 0.0;
     
-    return (analytic_integral(hi) - analytic_integral(lo)) / normalization_factor_;
+    return raw_integral(lo, hi) / normalization_factor_;
 }
 
 std::vector<double> GaussianQuadPulseTemplate::shifted_to_histogram(

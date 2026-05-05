@@ -39,6 +39,8 @@
 
   
   "template_config": {
+    "type": "gaussian_quad",
+    "empirical_csv_path": "./config/empirical_pulse_template_fast_10pe.csv",
     "native_bin_width_us": 0.5,
     "support_end_us": 500.0,
     "use_smooth_tail_onset": false,
