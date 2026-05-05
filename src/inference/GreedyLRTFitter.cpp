@@ -395,6 +395,41 @@ FitResult GreedyLRTFitter::fit(
         return false;
     };
 
+    auto drop_subthreshold_pulses = [&]() {
+        std::vector<PulseCandidate> kept_pulses;
+        std::vector<std::vector<double>> kept_components;
+        std::vector<double> kept_amplitudes;
+
+        kept_pulses.reserve(result.pulses.size());
+        kept_components.reserve(components.size());
+        kept_amplitudes.reserve(result.pulses.size());
+
+        for (std::size_t j = 0; j < result.pulses.size(); ++j) {
+            if (result.pulses[j].amplitude_pe >= settings.min_amplitude_pe) {
+                kept_pulses.push_back(result.pulses[j]);
+                kept_components.push_back(components[j]);
+                kept_amplitudes.push_back(result.pulses[j].amplitude_pe);
+            }
+        }
+
+        result.pulses = std::move(kept_pulses);
+        components = std::move(kept_components);
+
+        result.expected_total =
+            likelihood::sum_expected(components, kept_amplitudes);
+
+        if (result.expected_total.empty()) {
+            result.expected_total.assign(histogram.counts.size(), 0.0);
+        }
+
+        result.final_nll = likelihood::poisson_nll(
+            histogram.counts,
+            result.expected_total,
+            settings.fixed_expected,
+            settings.background_per_bin
+        );
+    };
+
     int fit_iter = 0;
     while (true) {
         ++fit_iter;
@@ -446,7 +481,8 @@ FitResult GreedyLRTFitter::fit(
                 std::vector<double> component = pulse_template_.shifted_to_histogram(time_us, histogram.bin_edges_us);
                 double init_amplitude = settings.min_amplitude_pe;
                 for (std::size_t i = 0; i < histogram.counts.size(); ++i) {
-                    double residual = histogram.counts[i] - result.expected_total[i];
+                    const double fixed = settings.fixed_expected.empty() ? 0.0 : settings.fixed_expected[i];
+                    const double residual = histogram.counts[i] - result.expected_total[i] - fixed - settings.background_per_bin;
                     if (residual > 0.0) {
                         init_amplitude += residual * component[i];
                     }
@@ -568,6 +604,7 @@ FitResult GreedyLRTFitter::fit(
         for (std::size_t j = 0; j < result.pulses.size() && j < best_refit_amplitudes.size(); ++j) {
             result.pulses[j].amplitude_pe = best_refit_amplitudes[j];
         }
+        drop_subthreshold_pulses();
 
         if (settings.debug) {
             std::cerr << "[FIT-ACCEPT]"
@@ -608,6 +645,8 @@ FitResult GreedyLRTFitter::fit(
             components = pruned_components;
             result = pruned;
         }
+
+        drop_subthreshold_pulses();
     }
 
     return result;

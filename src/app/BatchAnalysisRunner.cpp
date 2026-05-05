@@ -523,7 +523,7 @@ void BatchAnalysisRunner::run() const {
               << " bin_width_us=" << pulse_template->native_bin_width_us()
               << " peak_local_time_us="
               << (static_cast<double>(idx) + 0.5) * pulse_template->native_bin_width_us()
-              << " empirical_reference_time_us="
+              << " empirical_pretrigger_us="
               << cfg_.template_config.empirical_pretrigger_us
               << " sum=" << sum
               << "\n";

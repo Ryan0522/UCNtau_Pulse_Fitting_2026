@@ -183,7 +183,7 @@ std::vector<double> WindowedPulseProcessor::build_carry_expected(const std::vect
     for (const PulseCandidate& pulse : carry_pulses) {
         double template_start_us = pulse.time_us;
         double template_end_us = template_start_us + template_support_us;
-        if (template_end_us <= window_start_us) {
+        if (template_end_us <= window_start_us - 20.0) {
             continue;
         }
         std::vector<double> component = pulse_template_.shifted_to_histogram(pulse.time_us, histogram.bin_edges_us);

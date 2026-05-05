@@ -14,7 +14,7 @@
   "tems_tree_name": "tems",
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
-  "array_output_subdir": "emp_5nll_150us_10PE_epoch1",
+  "array_output_subdir": "quad_10nll_150us_10PE_epoch1",
   "shard_index": 21,
   "num_shards": 32,
   "enable_coincidence_output": true,
@@ -31,11 +31,11 @@
     "12"
   ],
   "template_config": {
-    "type": "empirical",
+    "type": "gaussian_quad",
     "empirical_csv_path": "./config/empirical_pulse_template_fast_10pe.csv",
     "empirical_pretrigger_us": 10.0,
     "native_bin_width_us": 0.5,
-    "support_end_us": 1000.0,
+    "support_end_us": 150.0,
     "use_smooth_tail_onset": false,
     "baseline": 5.42139594e-05,
     "gauss_amp": 1.52325156,
@@ -83,7 +83,7 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 5.0,
+    "delta_nll_cut": 10.0,
     "min_spacing_us": 1.0,
     "min_amplitude_pe": 10.0,
     "max_amplitude_pe": 400.0,
@@ -91,6 +91,7 @@
     "cluster_gap_us": 1.0,
     "max_coordinate_descent_steps": 20,
     "enable_back_pruning": true,
+    "allow_multiple_fits_per_cluster": true,
     "enable_close_pulse_regularization": false,
     "close_reg_lambda_nll": 100.0,
     "close_reg_window_us": 100.0,
@@ -98,10 +99,10 @@
     "close_reg_tail_tau_us": 30.0,
     "close_reg_eta": 0.1,
     "close_reg_floor_pe": 1.0,
-    "enable_local_evidence": true,
+    "enable_local_evidence": false,
     "local_evidence_pre_us": 2.0,
     "local_evidence_post_us": 2.0,
-    "local_delta_nll_cut": 4.0,
+    "local_delta_nll_cut": 7.0,
     "debug": false
   },
   "coincidence_settings": {
