@@ -78,7 +78,11 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
         ++j;
     }
 
-    start_time_us = hits[start_index].time_us;
+    const double first_hit_time_us = hits[start_index].time_us;
+    const double raw_start_time_us = first_hit_time_us - std::max(0.0, region_settings.fit_start_padding_us);
+
+    start_time_us = raw_start_time_us;
+    
     double last_hit_time_us = hits[j - 1].time_us;
     double padded_end_us = last_hit_time_us + region_settings.fit_end_padding_us;
     double next_hit_time_us = std::numeric_limits<double>::infinity();

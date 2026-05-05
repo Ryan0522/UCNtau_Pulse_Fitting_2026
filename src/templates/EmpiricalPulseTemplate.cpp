@@ -10,8 +10,13 @@
 namespace ucn {
 
 EmpiricalPulseTemplate::EmpiricalPulseTemplate(
-    double native_bin_width_us, double support_end_us, const std::string& csv_path
-) : native_bin_width_us_(native_bin_width_us), support_end_us_(support_end_us) {
+    double native_bin_width_us, double support_end_us, 
+    const std::string& csv_path, double reference_time_us
+) 
+    : native_bin_width_us_(native_bin_width_us),
+        support_end_us_(support_end_us),
+        reference_time_us_(reference_time_us)
+{
     load_csv(csv_path);
     normalize_and_build_cdf();
 }
@@ -114,10 +119,11 @@ std::vector<double> EmpiricalPulseTemplate::shifted_to_histogram(
     }
 
     std::vector<double> out(bin_edges_us.size() - 1, 0.0);
+    const double template_start_us = pulse_time_us - reference_time_us_;
 
     for (std::size_t i = 0; i + 1 < bin_edges_us.size(); ++i) {
-        const double rel_lo = bin_edges_us[i]     - pulse_time_us;
-        const double rel_hi = bin_edges_us[i + 1] - pulse_time_us;
+        const double rel_lo = bin_edges_us[i]     - template_start_us;
+        const double rel_hi = bin_edges_us[i + 1] - template_start_us;
         out[i] = integral(rel_lo, rel_hi);
     }
 

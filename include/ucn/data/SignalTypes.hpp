@@ -36,6 +36,8 @@ struct RegionSettings {
     double coarse_bin_width_us = 1.0;
     double fine_bin_width_us = 0.25;
     double min_gap_us = 10.0;
+
+    double fit_start_padding_us = 20.0;
     double fit_end_padding_us = 100.0;
     double coincidence_window_us = 0.1;
     int coincidence_min_hits = 2;

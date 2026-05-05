@@ -169,6 +169,9 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.template_config.empirical_csv_path = get_or<std::string>(
             t, "empirical_csv_path", cfg.template_config.empirical_csv_path
         );
+        cfg.template_config.empirical_reference_time_us = get_or<double>(
+            t, "empirical_reference_time_us", cfg.template_config.empirical_reference_time_us
+        );
         cfg.template_config.native_bin_width_us =
             get_or<double>(t, "native_bin_width_us", cfg.template_config.native_bin_width_us);
         cfg.template_config.support_end_us =
@@ -203,6 +206,8 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<double>(r, "fine_bin_width_us", cfg.region_settings.fine_bin_width_us);
         cfg.region_settings.min_gap_us =
             get_or<double>(r, "min_gap_us", cfg.region_settings.min_gap_us);
+        cfg.region_settings.fit_start_padding_us = 
+            get_or<double>(r, "fit_start_padding_us", cfg.region_settings.fit_start_padding_us);
         cfg.region_settings.fit_end_padding_us =
             get_or<double>(r, "fit_end_padding_us", cfg.region_settings.fit_end_padding_us);
         cfg.region_settings.coincidence_window_us =

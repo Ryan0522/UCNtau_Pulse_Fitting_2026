@@ -9,7 +9,8 @@ namespace ucn
 class EmpiricalPulseTemplate : public PulseTemplate {
 public:
     EmpiricalPulseTemplate(
-        double native_bin_width_us, double support_end_us, const std::string& csv_path
+        double native_bin_width_us, double support_end_us, 
+        const std::string& csv_path, double reference_time_us
     );
 
     double native_bin_width_us() const override { return native_bin_width_us_; }
@@ -24,6 +25,7 @@ public:
 private:
     double native_bin_width_us_ = 0.5;
     double support_end_us_ = 1000.0;
+    double reference_time_us_ = 10.0;
 
     std::vector<double> pmf_unit_;
     std::vector<double> cdf_edges_;

@@ -491,7 +491,8 @@ void BatchAnalysisRunner::run() const {
         pulse_template = std::make_unique<ucn::EmpiricalPulseTemplate>(
             cfg_.template_config.native_bin_width_us,
             cfg_.template_config.support_end_us,
-            cfg_.template_config.empirical_csv_path
+            cfg_.template_config.empirical_csv_path,
+            cfg_.template_config.empirical_reference_time_us
         );
     } else {
         pulse_template = std::make_unique<ucn::GaussianQuadPulseTemplate>(
