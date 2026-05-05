@@ -32,6 +32,7 @@ struct FitSettings {
     double cluster_gap_us = 1.0;
     int max_coordinate_descent_steps = 20;
     bool enable_back_pruning = true;
+    bool allow_multiple_fits_per_cluster = true;
 
     // Method 1: close-pulse residual regularization.
     // Penalty = lambda * exp(-dt / close_tau) * exp(-A_new / residual_scale),

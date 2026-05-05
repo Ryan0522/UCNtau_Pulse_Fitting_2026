@@ -15,7 +15,7 @@ using json = nlohmann::json;
 struct PulseTemplateConfig {
     std::string type = "gaussian_quad";
     std::string empirical_csv_path = "";
-    double empirical_reference_time_us = 0.0;
+    double empirical_pretrigger_us = 0.0;
 
     double native_bin_width_us = 0.5;
     double support_end_us = 100.0;

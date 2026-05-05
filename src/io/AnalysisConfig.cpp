@@ -169,8 +169,8 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.template_config.empirical_csv_path = get_or<std::string>(
             t, "empirical_csv_path", cfg.template_config.empirical_csv_path
         );
-        cfg.template_config.empirical_reference_time_us = get_or<double>(
-            t, "empirical_reference_time_us", cfg.template_config.empirical_reference_time_us
+        cfg.template_config.empirical_pretrigger_us = get_or<double>(
+            t, "empirical_pretrigger_us", cfg.template_config.empirical_pretrigger_us
         );
         cfg.template_config.native_bin_width_us =
             get_or<double>(t, "native_bin_width_us", cfg.template_config.native_bin_width_us);
@@ -280,6 +280,8 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         
         cfg.fit_settings.enable_back_pruning =
             get_or<bool>(f, "enable_back_pruning", cfg.fit_settings.enable_back_pruning);
+        cfg.fit_settings.allow_multiple_fits_per_cluster = 
+            get_or<bool>(f, "allow_multiple_fits_per_cluster", cfg.fit_settings.allow_multiple_fits_per_cluster);
         cfg.fit_settings.enable_close_pulse_regularization =
             get_or<bool>(f, "enable_close_pulse_regularization",
                          cfg.fit_settings.enable_close_pulse_regularization);

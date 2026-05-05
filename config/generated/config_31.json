@@ -99,7 +99,7 @@
     "close_reg_eta": 0.1,
     "close_reg_floor_pe": 1.0,
     "enable_local_evidence": true,
-    "local_evidence_pre_us": 0.5,
+    "local_evidence_pre_us": 2.0,
     "local_evidence_post_us": 2.0,
     "local_delta_nll_cut": 4.0,
     "debug": false

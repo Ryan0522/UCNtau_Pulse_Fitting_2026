@@ -492,7 +492,7 @@ void BatchAnalysisRunner::run() const {
             cfg_.template_config.native_bin_width_us,
             cfg_.template_config.support_end_us,
             cfg_.template_config.empirical_csv_path,
-            cfg_.template_config.empirical_reference_time_us
+            cfg_.template_config.empirical_pretrigger_us
         );
     } else {
         pulse_template = std::make_unique<ucn::GaussianQuadPulseTemplate>(
@@ -511,6 +511,22 @@ void BatchAnalysisRunner::run() const {
             cfg_.template_config.a4, cfg_.template_config.tau4
         );
     }
+
+    const auto pmf = pulse_template->pmf();
+    const auto it = std::max_element(pmf.begin(), pmf.end());
+    const auto idx = std::distance(pmf.begin(), it);
+    const double sum = std::accumulate(pmf.begin(), pmf.end(), 0.0);
+
+    std::cout << "[TEMPLATE]"
+              << " type=" << cfg_.template_config.type
+              << " n_bins=" << pmf.size()
+              << " bin_width_us=" << pulse_template->native_bin_width_us()
+              << " peak_local_time_us="
+              << (static_cast<double>(idx) + 0.5) * pulse_template->native_bin_width_us()
+              << " empirical_reference_time_us="
+              << cfg_.template_config.empirical_pretrigger_us
+              << " sum=" << sum
+              << "\n";
 
     GreedyLRTFitter fitter(*pulse_template);
     WindowedPulseProcessor processor(*pulse_template, fitter);

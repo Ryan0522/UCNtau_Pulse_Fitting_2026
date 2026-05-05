@@ -372,6 +372,7 @@ FitResult GreedyLRTFitter::fit(
     }
 
     std::vector<ClusterBound> bounds = build_cluster_bounds(clusters, histogram, settings);
+    std::vector<bool> cluster_used(bounds.size(), false);
 
     if (settings.debug) {
         std::cerr << "[FIT-BOUNDS] n_bounds=" << bounds.size() << "\n";
@@ -385,7 +386,14 @@ FitResult GreedyLRTFitter::fit(
         }
     }
 
-    std::vector<bool> cluster_used(bounds.size(), false);
+    auto candidate_is_too_close = [&](double candidate_time_us) {
+        for (const PulseCandidate& pulse : result.pulses) {
+            if (std::abs(pulse.time_us - candidate_time_us) < settings.min_spacing_us) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     int fit_iter = 0;
     while (true) {
@@ -417,7 +425,7 @@ FitResult GreedyLRTFitter::fit(
         std::vector<double> best_refit_amplitudes;
 
         for (std::size_t cluster_index = 0; cluster_index < bounds.size(); ++cluster_index) {          
-            if (cluster_used[cluster_index]) {
+            if (!settings.allow_multiple_fits_per_cluster && cluster_used[cluster_index]) {
                 continue;
             }
 
@@ -433,16 +441,7 @@ FitResult GreedyLRTFitter::fit(
             for (double time_us = bound.left_us;
                 time_us <= bound.right_us + 0.5 * settings.scan_step_us;
                 time_us += settings.scan_step_us) {
-                bool too_close = false;
-                for (const PulseCandidate& pulse : result.pulses) {
-                    if (std::abs(pulse.time_us - time_us) < settings.min_spacing_us) {
-                        too_close = true;
-                        break;
-                    }
-                }
-                if (too_close) {
-                    continue;
-                }
+                if (candidate_is_too_close(time_us)) continue;
 
                 std::vector<double> component = pulse_template_.shifted_to_histogram(time_us, histogram.bin_edges_us);
                 double init_amplitude = settings.min_amplitude_pe;
@@ -464,11 +463,7 @@ FitResult GreedyLRTFitter::fit(
                     settings.max_amplitude_pe,
                     init_amplitude
                 );
-
-                if (amplitude < settings.min_amplitude_pe) {
-                    // reject candidate
-                    continue;
-                }
+                if (amplitude < settings.min_amplitude_pe) continue;
 
                 std::vector<std::vector<double>> trial_components = components;
                 std::vector<double> trial_amplitudes;
@@ -484,10 +479,14 @@ FitResult GreedyLRTFitter::fit(
                     trial_amplitudes,
                     settings.fixed_expected,
                     settings.background_per_bin,
-                    settings.min_amplitude_pe,
+                    0.0,
                     settings.max_amplitude_pe,
                     settings.max_coordinate_descent_steps
                 );
+                if (trial_amplitudes.empty()) continue;
+                
+                const double candidate_refit_amp = trial_amplitudes.back();
+                if (candidate_refit_amp < settings.min_amplitude_pe) continue;
 
                 std::vector<double> trial_expected = likelihood::sum_expected(trial_components, trial_amplitudes);
                 double trial_nll = likelihood::poisson_nll(
@@ -556,9 +555,13 @@ FitResult GreedyLRTFitter::fit(
 
         if (best_cluster_index < 0 || best_margin < 0.0) {
              break;
-         }
+        }
 
-        cluster_used[static_cast<std::size_t>(best_cluster_index)] = true;
+        if (!settings.allow_multiple_fits_per_cluster &&
+            best_cluster_index >= 0) {
+            cluster_used[static_cast<std::size_t>(best_cluster_index)] = true;
+        }
+
         result.pulses.push_back(PulseCandidate{best_time, best_amplitude});
         components.push_back(best_component);
 

@@ -103,6 +103,7 @@
     "cluster_gap_us": 1.0,
     "max_coordinate_descent_steps": 20,
     "enable_back_pruning": true,
+    "allow_multiple_fits_per_cluster": true,
 
     "enable_close_pulse_regularization": false,
     "close_reg_lambda_nll": 100.0,
