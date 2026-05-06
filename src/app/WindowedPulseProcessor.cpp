@@ -62,6 +62,7 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
                                                     int& next_index,
                                                     double& start_time_us,
                                                     double& end_time_us,
+                                                    double& model_end_time_us,
                                                     Histogram& histogram) const {
     int n_hits = static_cast<int>(hits.size());
     if (start_index >= n_hits) {
@@ -110,17 +111,18 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
     // Pre-pad nad post-pad
     const double prepad_us = std::max(0.0, region_settings.fit_start_padding_us);
     const double postpad_us = std::max(0.0, region_settings.fit_end_padding_us);
+    
     start_time_us = seed_time_us - prepad_us;
-    const double padded_end_us = last_hit_time_us + postpad_us;
-    end_time_us = padded_end_us;
+    end_time_us = last_hit_time_us;
+    model_end_time_us = last_hit_time_us + postpad_us;
     next_index = j;
 
-    const double width_us = end_time_us - start_time_us;
-    if (width_us < bin_width_us) {
+    const double model_width_us = model_end_time_us - start_time_us;
+    if (model_width_us < bin_width_us) {
         return false;
     }
     
-    const int n_bins = static_cast<int>(std::ceil(width_us / bin_width_us));
+    const int n_bins = static_cast<int>(std::ceil(model_width_us / bin_width_us));
     if (n_bins <= 0) {
         return false;
     }
@@ -143,7 +145,7 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
 
     for (auto it = first_it; it != hits.begin() + j; ++it) {
         if (it->time_us < start_time_us) continue;
-        if (it->time_us >= end_time_us) break;
+        if (it->time_us >= model_end_time_us) break;
 
         const double dt_us = it->time_us - start_time_us;
         const int bin = static_cast<int>(dt_us / bin_width_us);
@@ -255,6 +257,7 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
         Histogram coarse_histogram;
         double start_time_us = 0.0;
         double end_time_us = 0.0;
+        double model_end_time_us = 0.0;
         int next_index = i;
 
         bool ok = build_window_histogram(hits,
@@ -264,6 +267,7 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
                                          next_index,
                                          start_time_us,
                                          end_time_us,
+                                         model_end_time_us,
                                          coarse_histogram);
         if (!ok) {
             i = std::max(next_index, i + 1);
@@ -283,6 +287,7 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
                                         next_index,
                                         start_time_us,
                                         end_time_us,
+                                        model_end_time_us,
                                         fine_histogram);
             if (!ok) {
                 i = std::max(next_index, i + 1);
@@ -430,13 +435,14 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
                 full_expected[j] += window_fit_settings.fixed_expected[j];
             }
         }
-        double expected_sum = std::accumulate(fit.expected_total.begin(), fit.expected_total.end(), 0.0);
+        double expected_sum = std::accumulate(full_expected.begin(), full_expected.end(), 0.0);
         double observed_sum = std::accumulate(histogram.counts.begin(), histogram.counts.end(), 0.0);
 
         WindowSummary summary;
         summary.window_index = window_index;
         summary.start_time_us = start_time_us;
         summary.end_time_us = end_time_us;
+        summary.width_us = end_time_us - start_time_us;
         summary.bin_width_us = bin_width_us;
         summary.pulse_count = static_cast<int>(fit.pulses.size());
         summary.observed_count = static_cast<int>(std::llround(observed_sum));
@@ -460,7 +466,7 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
             tagged.time_us = pulse.time_us;
             tagged.amplitude_pe = pulse.amplitude_pe;
             tagged.window_index = window_index;
-            tagged.window_width_us = end_time_us - start_time_us;
+            tagged.width_us = end_time_us - start_time_us;
             tagged.is_pileup = fit.pulses.size() > 1;
             tagged.uses_fine_bins = uses_fine_bins;
             output_pulses.push_back(tagged);

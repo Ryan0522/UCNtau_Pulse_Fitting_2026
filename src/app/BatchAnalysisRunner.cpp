@@ -139,7 +139,7 @@ void write_summary_header(std::ofstream& out) {
 
 void write_pulse_header(std::ofstream& out) {
     out << "run,segment,hold_time_s,region,time_us,amplitude_pe,"
-           "window_index,window_width_us,is_pileup,uses_fine_bins,"
+           "window_index,width_us,is_pileup,uses_fine_bins,"
            "background_rate_hz\n";
 }
 
@@ -152,13 +152,13 @@ void write_coincidence_header(std::ofstream& out) {
 
 void write_window_header(std::ofstream& out) {
     out << "run,segment,hold_time_s,region,window_index,"
-           "start_time_us,end_time_us,bin_width_us,"
+           "start_time_us,end_time_us,width_us,bin_width_us,"
            "pulse_count,seed_count,observed_count,expected_count,final_nll\n";
 }
 
 void write_tail_pulse_header(std::ofstream& out) {
     out << "tail_id,run,segment,hold_time_s,region,pulse_index_in_region,"
-           "pulse_time_us,amplitude_pe,window_index,window_width_us,"
+           "pulse_time_us,amplitude_pe,window_index,width_us,"
            "is_pileup,uses_fine_bins,bin_width_us,window_start_us,"
            "window_end_us,n_raw_hits\n";
 }
@@ -237,7 +237,7 @@ void append_tagged_pulses(std::ofstream& out,
             << p.time_us << ','
             << p.amplitude_pe << ','
             << p.window_index << ','
-            << p.window_width_us << ','
+            << p.width_us << ','
             << (p.is_pileup ? 1 : 0) << ','
             << (p.uses_fine_bins ? 1 : 0) << ','
             << background_rate_hz << '\n';
@@ -258,6 +258,7 @@ void append_window_rows(std::ofstream& out,
             << w.window_index << ','
             << w.start_time_us << ','
             << w.end_time_us << ','
+            << w.width_us << ','
             << w.bin_width_us << ','
             << w.pulse_count << ','
             << w.seed_count << ','
@@ -397,7 +398,7 @@ void accumulate_tail_waveforms(std::ofstream& tail_pulses_out,
                         << p.time_us << ','
                         << p.amplitude_pe << ','
                         << p.window_index << ','
-                        << p.window_width_us << ','
+                        << p.width_us << ','
                         << (p.is_pileup ? 1 : 0) << ','
                         << (p.uses_fine_bins ? 1 : 0) << ','
                         << settings.bin_width_us << ','

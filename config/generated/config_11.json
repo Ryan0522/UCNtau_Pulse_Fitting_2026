@@ -14,7 +14,7 @@
   "tems_tree_name": "tems",
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
-  "array_output_subdir": "debug_cfwin_emp_10nll_gap5_pad10_150_5PE_bg_nofe_nomulti_noprune_epoch1",
+  "array_output_subdir": "debug_cfwin_emp_10nll_gap20_pad10_150_5PE_bg_nofe_nomulti_noprune_epoch1",
   "shard_index": 11,
   "num_shards": 32,
   "enable_coincidence_output": true,
@@ -55,7 +55,7 @@
   "region_settings": {
     "coarse_bin_width_us": 0.5,
     "fine_bin_width_us": 0.25,
-    "min_gap_us": 5.0,
+    "min_gap_us": 20.0,
     "fit_start_padding_us": 10.0,
     "fit_end_padding_us": 150.0,
     "coincidence_window_us": 0.05,

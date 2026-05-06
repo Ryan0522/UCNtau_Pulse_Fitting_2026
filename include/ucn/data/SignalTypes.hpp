@@ -13,6 +13,7 @@ struct WindowSummary {
     int window_index = 0;
     double start_time_us = 0.0;
     double end_time_us = 0.0;
+    double width_us = 0.0;
     double bin_width_us = 0.0;
     int pulse_count = 0;
     int observed_count = 0;
@@ -26,7 +27,7 @@ struct TaggedPulse {
     double amplitude_pe = 0.0;
     
     int window_index = -1;
-    double window_width_us = 0.0;
+    double width_us = 0.0;
 
     bool is_pileup = false;
     bool uses_fine_bins = false;

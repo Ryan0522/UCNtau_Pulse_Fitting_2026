@@ -40,6 +40,7 @@ private:
                                 int& next_index,
                                 double& start_time_us,
                                 double& end_time_us,
+                                double& model_end_time_us,
                                 Histogram& histogram) const;
 
     std::vector<double> find_coincidence_seeds(const std::vector<Hit>& hits,
