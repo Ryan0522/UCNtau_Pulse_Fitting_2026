@@ -69,56 +69,85 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
         return false;
     }
 
-    int j = start_index + 1;
-    while (j < n_hits) {
-        double gap = hits[j].time_us - hits[j - 1].time_us;
-        if (gap > region_settings.min_gap_us) {
+    int seed_index = -1;
+
+    for (int i = start_index; i < n_hits; ++i) {
+        const double t0 = hits[i].time_us;
+        const int ch0 = hits[i].channel;
+
+        bool armed = false;
+        int total = 1;
+
+        for (int j = i + 1; j < n_hits; ++j) {
+            const double dt = hits[j].time_us - t0;
+            if (dt > region_settings.coincidence_window_us) break;
+            if (hits[j].channel != ch0) armed = true;
+            ++total;
+        }
+
+        if (armed && total >= region_settings.coincidence_min_hits) {
+            seed_index = i;
             break;
         }
-        ++j;
     }
 
-    const double first_hit_time_us = hits[start_index].time_us;
-    const double raw_start_time_us = first_hit_time_us - std::max(0.0, region_settings.fit_start_padding_us);
-
-    start_time_us = raw_start_time_us;
-    
-    double last_hit_time_us = hits[j - 1].time_us;
-    double padded_end_us = last_hit_time_us + region_settings.fit_end_padding_us;
-    double next_hit_time_us = std::numeric_limits<double>::infinity();
-    if (j < n_hits) {
-        next_hit_time_us = hits[j].time_us;
-    }
-
-    if (std::isfinite(next_hit_time_us)) {
-        end_time_us = std::min(padded_end_us,
-                               std::nextafter(next_hit_time_us,
-                                              -std::numeric_limits<double>::infinity()));
-    } else {
-        end_time_us = padded_end_us;
-    }
-
-    next_index = j;
-
-    double width_us = end_time_us - start_time_us;
-    if (width_us < bin_width_us) {
+    if (seed_index < 0) {
+        next_index = n_hits;
         return false;
     }
 
-    int n_bins = static_cast<int>(std::ceil(width_us / bin_width_us));
-    if (n_bins < 1) {
+    const double seed_time_us = hits[seed_index].time_us;
+
+    // Telescoping until gap > min_gap_us
+    int j = seed_index + 1;
+    while (j < n_hits) {
+        const double gap = hits[j].time_us - hits[j - 1].time_us;
+        if (gap > region_settings.min_gap_us) break;
+        ++j;
+    }
+    const double last_hit_time_us = hits[j - 1].time_us;
+
+    // Pre-pad nad post-pad
+    const double prepad_us = std::max(0.0, region_settings.fit_start_padding_us);
+    const double postpad_us = std::max(0.0, region_settings.fit_end_padding_us);
+    start_time_us = seed_time_us - prepad_us;
+    const double padded_end_us = last_hit_time_us + postpad_us;
+    end_time_us = padded_end_us;
+    next_index = j;
+
+    const double width_us = end_time_us - start_time_us;
+    if (width_us < bin_width_us) {
+        return false;
+    }
+    
+    const int n_bins = static_cast<int>(std::ceil(width_us / bin_width_us));
+    if (n_bins <= 0) {
         return false;
     }
 
     histogram.bin_edges_us.clear();
     histogram.counts.assign(static_cast<std::size_t>(n_bins), 0.0);
-    for (int i = 0; i <= n_bins; ++i) {
-        histogram.bin_edges_us.push_back(start_time_us + static_cast<double>(i) * bin_width_us);
+    
+    for (int b = 0; b <= n_bins; ++b) {
+        histogram.bin_edges_us.push_back(start_time_us + b * bin_width_us);
     }
 
-    for (int i = start_index; i < next_index; ++i) {
-        double dt_us = hits[i].time_us - start_time_us;
-        int bin = static_cast<int>(dt_us / bin_width_us);
+    auto first_it = std::lower_bound(
+        hits.begin() + start_index,
+        hits.begin() + j,
+        start_time_us,
+        [](const Hit& h, double t) {
+            return h.time_us < t;
+        }
+    );
+
+    for (auto it = first_it; it != hits.begin() + j; ++it) {
+        if (it->time_us < start_time_us) continue;
+        if (it->time_us >= end_time_us) break;
+
+        const double dt_us = it->time_us - start_time_us;
+        const int bin = static_cast<int>(dt_us / bin_width_us);
+
         if (bin >= 0 && bin < n_bins) {
             histogram.counts[static_cast<std::size_t>(bin)] += 1.0;
         }
@@ -264,7 +293,8 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
             uses_fine_bins = true;
         }
 
-        std::vector<double> fixed_expected = build_carry_expected(carry_pulses, histogram);
+        // std::vector<double> fixed_expected = build_carry_expected(carry_pulses, histogram);
+        std::vector<double> fixed_expected(histogram.counts.size(), 0.0);
         std::vector<double> seeds = find_coincidence_seeds(hits,
                                                            start_time_us,
                                                            end_time_us,
