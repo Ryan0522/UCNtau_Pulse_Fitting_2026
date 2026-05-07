@@ -31,6 +31,16 @@ public:
     void on_lrt_trial(const LRTTrialDebug& row) override;
     void on_lrt_accept(const LRTTrialDebug& row) override;
 
+    void write_lrt_trials_for_case(
+        const std::string& case_id,
+        const std::vector<LRTTrialDebug>& rows
+    );
+
+    void write_lrt_accepts_for_case(
+        const std::string& case_id,
+        const std::vector<LRTTrialDebug>& rows
+    );
+
 private:
     bool enabled_ = false;
     int max_per_case_ = 0;

@@ -9,6 +9,11 @@ enum class DebugCaseType {
     SingleNeutronSingleSeed,
     SingleNeutronMultiSeed,
     MultiNeutron,
+
+    ObservedOneSeedOneFit,
+    ObservedOneSeedMultiFit,
+    ObservedMultiSeed,
+
     Unknown
 };
 
@@ -20,10 +25,16 @@ inline const char* case_name(DebugCaseType t) {
             return "single_neutron_multi_seed";
         case DebugCaseType::MultiNeutron:
             return "multi_neutron";
+        case DebugCaseType::ObservedOneSeedOneFit:
+            return "observed_one_seed_one_fit";
+        case DebugCaseType::ObservedOneSeedMultiFit:
+            return "observed_one_seed_multi_fit";
+        case DebugCaseType::ObservedMultiSeed:
+            return "observed_multi_seed";
         default:
             return "unknown";
     }
-};
+}
 
 struct TruthPulse {
     double time_us = 0.0;
@@ -75,6 +86,20 @@ public:
 
     virtual void on_lrt_trial(const LRTTrialDebug&) {}
     virtual void on_lrt_accept(const LRTTrialDebug&) {}
+};
+
+class BufferedDebugSink : public DebugSink {
+public:
+    void on_lrt_trial(const LRTTrialDebug& row) override {
+        trials.push_back(row);
+    }
+
+    void on_lrt_accept(const LRTTrialDebug& row) override {
+        accepts.push_back(row);
+    }
+
+    std::vector<LRTTrialDebug> trials;
+    std::vector<LRTTrialDebug> accepts;
 };
 
 } // namespace ucn::debug

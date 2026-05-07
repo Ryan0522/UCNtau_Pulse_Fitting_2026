@@ -57,6 +57,25 @@ debug::DebugCaseType classify_debug_case(
     return debug::DebugCaseType::Unknown;
 }
 
+debug::DebugCaseType classify_observed_debug_case(
+    int n_seeds,
+    int n_fit_pulses
+) {
+    if (n_seeds == 1 && n_fit_pulses == 1) {
+        return debug::DebugCaseType::ObservedOneSeedOneFit;
+    }
+
+    if (n_seeds == 1 && n_fit_pulses > 1) {
+        return debug::DebugCaseType::ObservedOneSeedMultiFit;
+    }
+
+    if (n_seeds > 1) {
+        return debug::DebugCaseType::ObservedMultiSeed;
+    }
+
+    return debug::DebugCaseType::Unknown;
+}
+
 } // namespace
 
 WindowedPulseProcessor::WindowedPulseProcessor(const PulseTemplate& pulse_template,
