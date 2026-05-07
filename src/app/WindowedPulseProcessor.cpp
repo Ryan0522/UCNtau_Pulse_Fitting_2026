@@ -24,6 +24,41 @@ double compute_log_likelihood(const std::vector<double>& counts,
     return log_l;
 }
 
+std::vector<debug::TruthPulse> select_truth_in_window(
+    const std::vector<debug::TruthPulse>* truth,
+    double start_us,
+    double model_end_us
+) {
+    std::vector<debug::TruthPulse> out;
+    if (!truth) return out;
+
+    for (const auto& p : *truth) {
+        if (p.time_us >= start_us && p.time_us < model_end_us) {
+            out.push_back(p);
+        }
+    }
+
+    return out;
+}
+
+debug::DebugCaseType classify_debug_case(
+    int n_truth, int n_seeds
+) {
+    if (n_truth == 1 && n_seeds == 1) {
+        return debug::DebugCaseType::SingleNeutronSingleSeed;
+    }
+
+    if (n_truth == 1 && n_seeds > 1) {
+        return debug::DebugCaseType::SingleNeutronMultiSeed;
+    }
+
+    if (n_truth >= 2) {
+        return debug::DebugCaseType::MultiNeutron;
+    }
+
+    return debug::DebugCaseType::Unknown;
+}
+
 } // namespace
 
 WindowedPulseProcessor::WindowedPulseProcessor(const PulseTemplate& pulse_template,
@@ -32,12 +67,10 @@ WindowedPulseProcessor::WindowedPulseProcessor(const PulseTemplate& pulse_templa
       fitter_(fitter) {
 }
 
-void WindowedPulseProcessor::set_debug_max_windows(int n) {
-    debug_max_windows_ = n;
-}
-
-void WindowedPulseProcessor::set_progress_enabled(bool enabled) {
-    progress_enabled_ = enabled;
+void WindowedPulseProcesor::set_debug_writer(
+    std::shared_ptr<debug::DebugCsvWriter> writer
+) {
+    debug_writer_ = std::move(writer);
 }
 
 std::vector<Hit> WindowedPulseProcessor::select_hits(const std::vector<Hit>& hits,
@@ -245,14 +278,6 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
     int last_report_second = -1;    
     
     while (i < static_cast<int>(hits.size())) {
-        if (debug_max_windows_ >= 0 && debug_window_count >= debug_max_windows_) {
-            if (region_settings.debug) {
-                std::cerr << std::fixed << std::setprecision(3);
-                std::cerr << "[STOP] Reached debug_max_windows_ = "
-                        << debug_max_windows_ << "\n";
-            }
-            break;
-        }
 
         Histogram coarse_histogram;
         double start_time_us = 0.0;
@@ -306,85 +331,16 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
                                                            bin_width_us,
                                                            region_settings);
 
-        if (progress_enabled_) {
-            const double reached_s =
-                (end_time_us - stream_start_us) * 1.0e-6;
-
-            const double percent =
-                100.0 * reached_s / stream_width_s;
-
-            const int report_second =
-                static_cast<int>(std::floor(reached_s));
-
-            if (report_second > last_report_second || end_time_us >= stream_end_us) {
-                last_report_second = report_second;
-
-                std::cerr << std::fixed << std::setprecision(2)
-                        << "\r[fit_stream] reached "
-                        << reached_s << " / " << stream_width_s << " s"
-                        << " (" << percent << "%)"
-                        << " | window=" << window_index
-                        << " | width_us=" << (end_time_us - start_time_us)
-                        << " | hits=" << next_index << "/" << hits.size()
-                        << " | seeds=" << seeds.size()
-                        << std::flush;
-            }
-        }
-
+        
         if (seeds.empty()) {
             i = next_index;
             ++window_index;
             continue;
         }
 
-        if (region_settings.debug) {
-            debug_window_count++;
-            std::cerr << std::fixed << std::setprecision(3);
-            std::cerr << "\n========== [WINDOW " << window_index << "] ==========\n";
-            std::cerr << "[WINDOW] start_time_us=" << start_time_us
-                    << " end_time_us=" << end_time_us
-                    << " width_us=" << (end_time_us - start_time_us)
-                    << " next_index=" << next_index
-                    << " uses_fine_bins=" << uses_fine_bins
-                    << " bin_width_us=" << bin_width_us
-                    << "\n";
-
-            std::cerr << "[WINDOW-EDGES] bin_edges_us =";
-            for (double x : histogram.bin_edges_us) std::cerr << " " << x;
-            std::cerr << "\n";
-
-            std::cerr << "[WINDOW-HIST] counts =";
-            for (double c : histogram.counts) std::cerr << " " << c;
-            std::cerr << "\n";
-
-            double carry_sum = std::accumulate(fixed_expected.begin(),
-                                            fixed_expected.end(), 0.0);
-            std::cerr << "[WINDOW-PRE-FIT] carry_sum=" << carry_sum
-                    << " n_seeds=" << seeds.size()
-                    << "\n";
-
-            std::cerr << "[WINDOW-SEEDS] seeds =";
-            for (double s : seeds) std::cerr << " " << s;
-            std::cerr << "\n";
-        }
-
         FitSettings window_fit_settings = fit_settings;
         window_fit_settings.background_per_bin = background_rate_hz * bin_width_us * 1.0e-6;
         window_fit_settings.fixed_expected = fixed_expected;
-
-        if (progress_enabled_) {
-            if (end_time_us - start_time_us > 4000) {
-                std::cerr << std::fixed << std::setprecision(3)
-                        << "\n[fit_stream] fitting large window=" << window_index
-                        << " start_s=" << (start_time_us - stream_start_us) * 1.0e-6
-                        << " end_s=" << (end_time_us - stream_start_us) * 1.0e-6
-                        << " width_us=" << (end_time_us - start_time_us)
-                        << " n_bins=" << histogram.counts.size()
-                        << " n_hits=" << (next_index - i)
-                        << " n_seeds=" << seeds.size()
-                        << "\n";
-            }
-        }
 
         auto fit_t0 = std::chrono::steady_clock::now();
 
@@ -392,36 +348,10 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
 
         auto fit_t1 = std::chrono::steady_clock::now();
 
-        if (progress_enabled_) {
-            if (end_time_us - start_time_us > 4000) {
-                const double fit_seconds =
-                    std::chrono::duration<double>(fit_t1 - fit_t0).count();
-
-                std::cerr << "[fit_stream] done window=" << window_index
-                        << " fit_time_s=" << fit_seconds
-                        << " n_pulses=" << fit.pulses.size()
-                        << "\n";
-            }
-        }
-
         if (fit.pulses.empty()) {
             i = next_index;
             ++window_index;
             continue;
-        }
-
-        if (region_settings.debug) {
-            std::cerr << "[WINDOW-FIT-DONE] window_index=" << window_index
-                    << " n_pulses=" << fit.pulses.size()
-                    << " final_nll=" << fit.final_nll
-                    << "\n";
-
-            for (std::size_t k = 0; k < fit.pulses.size(); ++k) {
-                std::cerr << "  pulse[" << k << "]"
-                        << " t=" << fit.pulses[k].time_us
-                        << " a=" << fit.pulses[k].amplitude_pe
-                        << "\n";
-            }
         }
 
         std::vector<double> full_expected = fit.expected_total;
@@ -475,12 +405,6 @@ void WindowedPulseProcessor::fit_stream(const std::vector<Hit>& hits,
 
         i = next_index;
         ++window_index;
-    }
-
-    if (progress_enabled_) {
-        std::cerr << "\n[fit_stream] finished. windows=" << window_index
-                << " pulses_out=" << output_pulses.size()
-                << "\n";
     }
 }
 

@@ -531,6 +531,9 @@ void BatchAnalysisRunner::run() const {
 
     GreedyLRTFitter fitter(*pulse_template);
     WindowedPulseProcessor processor(*pulse_template, fitter);
+
+    processor.set_debug_max_windows(cfg_.debug_max_windows);
+
     CoincidenceFitter coincidence_fitter(cfg_.coincidence_settings);
 
     std::cout << "Selected " << all_runs.size() << " production/good runs total.\n"

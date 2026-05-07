@@ -83,6 +83,8 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
     cfg.shard_index = get_or<int>(j, "shard_index", cfg.shard_index);
     cfg.num_shards = get_or<int>(j, "num_shards", cfg.num_shards);
 
+    cfg.debug_max_windows = get_or<int>(j, "debug_max_windows", cfg.debug_max_windows);
+
     cfg.enable_coincidence_output = get_or<bool>(j, "enable_coincidence_output", cfg.enable_coincidence_output);
 
     cfg.require_tems_tree = get_or<bool>(j, "require_tems_tree", cfg.require_tems_tree);
@@ -225,8 +227,6 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
                            cfg.region_settings.background_tolerance_fraction);
         cfg.region_settings.enable_background_fit =
             get_or<bool>(r, "enable_background_fit", cfg.region_settings.enable_background_fit);
-        cfg.region_settings.debug =
-            get_or<bool>(r, "debug", cfg.region_settings.debug);
     }
 
     if (j.contains("tail_extraction_settings")) {
@@ -306,8 +306,6 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<double>(f, "local_evidence_post_us", cfg.fit_settings.local_evidence_post_us);
         cfg.fit_settings.local_delta_nll_cut =
             get_or<double>(f, "local_delta_nll_cut", cfg.fit_settings.local_delta_nll_cut);
-        cfg.fit_settings.debug =
-            get_or<bool>(f, "debug", cfg.fit_settings.debug);
     }
 
     load_runinfo_if_present(cfg);

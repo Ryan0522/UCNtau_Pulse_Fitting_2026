@@ -22,6 +22,8 @@
   "shard_index": 0,
   "num_shards": 1,
 
+  "debug_max_windows": 10,
+
   "enable_coincidence_output": true,
 
   "require_tems_tree": true,
@@ -76,8 +78,7 @@
     "background_duration_us": 10000000.0,
     "background_iterations": 10,
     "background_tolerance_fraction": 0.01,
-    "enable_background_fit": true,
-    "debug": false
+    "enable_background_fit": true
   },
 
   "tail_extraction_settings": {
@@ -116,9 +117,7 @@
     "enable_local_evidence": false,
     "local_evidence_pre_us": 2.0,
     "local_evidence_post_us": 2.0,
-    "local_delta_nll_cut": 7.0,
-
-    "debug": false
+    "local_delta_nll_cut": 7.0
   },
 
   "coincidence_settings": {

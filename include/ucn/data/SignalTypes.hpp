@@ -47,7 +47,6 @@ struct RegionSettings {
     int background_iterations = 10;
     double background_tolerance_fraction = 1.0e-2;
     bool enable_background_fit = true;
-    bool debug = false;
 };
 
 struct RegionResult {

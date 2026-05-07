@@ -77,10 +77,7 @@ int main(int argc, char** argv) {
         ucn::GreedyLRTFitter fitter(pulse_template);
         ucn::WindowedPulseProcessor processor(pulse_template, fitter);
         processor.set_progress_enabled(show_progress);
-
-        processor.set_debug_max_windows(-1);
-        cfg.region_settings.debug = false;
-        cfg.fit_settings.debug = false;
+        processor.set_debug_max_windows(cfg.debug_max_windows);
 
         std::vector<ucn::Hit> hits = load_mc_hits(argv[2]);
         std::cout << "Loaded " << hits.size() << " hits from MC CSV.\n";

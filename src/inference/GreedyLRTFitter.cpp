@@ -3,10 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <limits>
 #include <stdexcept>
-#include <iomanip>
 #include <string>
 #include <numeric>
 
@@ -317,28 +315,6 @@ FitResult GreedyLRTFitter::fit(
     std::span<const double> coincidence_times_us,
     const FitSettings& settings
 ) const {
-    if (settings.debug) {
-        std::cerr << "\n[FIT-ENTER]"
-                << " nbins=" << histogram.counts.size()
-                << " scan_step_us=" << settings.scan_step_us
-                << " max_offset_us=" << settings.max_offset_us
-                << " delta_nll_cut=" << settings.delta_nll_cut
-                << " min_spacing_us=" << settings.min_spacing_us
-                << " min_amplitude_pe=" << settings.min_amplitude_pe
-                << " max_amplitude_pe=" << settings.max_amplitude_pe
-                << " close_reg=" << settings.enable_close_pulse_regularization
-                << " local_evidence=" << settings.enable_local_evidence
-                << "\n";
-
-        std::cerr << "[FIT-HIST] counts =";
-        for (double c : histogram.counts) std::cerr << " " << c;
-        std::cerr << "\n";
-
-        std::cerr << "[FIT-SEEDS-IN] seeds =";
-        for (double s : coincidence_times_us) std::cerr << " " << s;
-        std::cerr << "\n";
-    }
-
     if (histogram.bin_edges_us.size() != histogram.counts.size() + 1) {
         throw std::invalid_argument("Histogram bin_edges_us must have size counts.size() + 1.");
     }
@@ -361,30 +337,9 @@ FitResult GreedyLRTFitter::fit(
         coincidence_times_us,
         settings.cluster_gap_us
     );
-    
-    if (settings.debug) {
-        std::cerr << "[FIT-CLUSTERS] n_clusters=" << clusters.size() << "\n";
-        for (std::size_t k = 0; k < clusters.size(); ++k) {
-            std::cerr << "  cluster[" << k << "] =";
-            for (double t : clusters[k]) std::cerr << " " << t;
-            std::cerr << "\n";
-        }
-    }
 
     std::vector<ClusterBound> bounds = build_cluster_bounds(clusters, histogram, settings);
     std::vector<bool> cluster_used(bounds.size(), false);
-
-    if (settings.debug) {
-        std::cerr << "[FIT-BOUNDS] n_bounds=" << bounds.size() << "\n";
-        for (std::size_t k = 0; k < bounds.size(); ++k) {
-            std::cerr << "  bound[" << k << "]"
-                    << " center=" << bounds[k].cluster_time_us
-                    << " left=" << bounds[k].left_us
-                    << " right=" << bounds[k].right_us
-                    << " width=" << (bounds[k].right_us - bounds[k].left_us)
-                    << "\n";
-        }
-    }
 
     auto candidate_is_too_close = [&](double candidate_time_us) {
         for (const PulseCandidate& pulse : result.pulses) {
@@ -398,19 +353,6 @@ FitResult GreedyLRTFitter::fit(
     int fit_iter = 0;
     while (true) {
         ++fit_iter;
-        if (settings.debug) {
-            std::cerr << "\n[FIT-ITER " << fit_iter << "]"
-                    << " current_n_pulses=" << result.pulses.size()
-                    << " current_final_nll=" << result.final_nll
-                    << "\n";
-
-            std::cerr << "[FIT-ITER-PULSES]";
-            for (const auto& p : result.pulses) {
-                std::cerr << " (t=" << p.time_us
-                        << ", a=" << p.amplitude_pe << ")";
-            }
-            std::cerr << "\n";
-        }
 
         double best_margin = -std::numeric_limits<double>::infinity();
         double best_delta = 0.0;
@@ -430,13 +372,6 @@ FitResult GreedyLRTFitter::fit(
             }
 
             const ClusterBound& bound = bounds[cluster_index];
-
-            if (settings.debug) {
-                std::cerr << "[FIT-ITER-CLUSTER] cluster_index=" << cluster_index
-                        << " left=" << bound.left_us
-                        << " right=" << bound.right_us
-                        << "\n";
-            }
 
             for (double time_us = bound.left_us;
                 time_us <= bound.right_us + 0.5 * settings.scan_step_us;
@@ -520,22 +455,6 @@ FitResult GreedyLRTFitter::fit(
 
                 const double margin = local_pass ? (delta - required_delta)
                                                  : -std::numeric_limits<double>::infinity();
-                 
-                if (settings.debug) {
-                    std::cerr << "[TRY]"
-                            << " iter=" << fit_iter
-                            << " cluster=" << cluster_index
-                            << " time_us=" << time_us
-                            << " trial_amp=" << trial_amplitudes.back()
-                            << " trial_nll=" << trial_nll
-                            << " delta=" << delta
-                            << " penalty=" << penalty
-                            << " required=" << required_delta
-                            << " local_delta=" << local_delta
-                            << " local_pass=" << local_pass
-                            << " margin=" << margin
-                            << "\n";
-                }
 
                 if (margin > best_margin) {
                     best_margin = margin;
@@ -567,26 +486,6 @@ FitResult GreedyLRTFitter::fit(
 
         for (std::size_t j = 0; j < result.pulses.size() && j < best_refit_amplitudes.size(); ++j) {
             result.pulses[j].amplitude_pe = best_refit_amplitudes[j];
-        }
-
-        if (settings.debug) {
-            std::cerr << "[FIT-ACCEPT]"
-                    << " iter=" << fit_iter
-                    << " accepted_time=" << best_time
-                    << " accepted_amp=" << best_amplitude
-                    << " accepted_delta=" << best_delta
-                    << " required_delta=" << best_required_delta
-                    << " penalty=" << best_penalty
-                    << " local_delta=" << best_local_delta
-                    << " margin=" << best_margin
-                    << "\n";
-
-            std::cerr << "[FIT-AFTER-REFIT]";
-            for (const auto& p : result.pulses) {
-                std::cerr << " (t=" << p.time_us
-                        << ", a=" << p.amplitude_pe << ")";
-            }
-            std::cerr << "\n";
         }
         
         result.expected_total = best_expected;

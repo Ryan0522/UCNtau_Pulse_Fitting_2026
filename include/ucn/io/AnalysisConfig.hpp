@@ -103,6 +103,9 @@ struct AnalysisConfig {
     int shard_index = 0;
     int num_shards = 1;
 
+    // Debug control
+    int debug_max_windows = 0; 
+
     // Coincidence Settings
     bool enable_coincidence_output = true;
     CoincidenceSettings coincidence_settings;

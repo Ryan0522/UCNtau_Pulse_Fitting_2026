@@ -4,8 +4,10 @@
 #include "ucn/data/SignalTypes.hpp"
 #include "ucn/inference/GreedyLRTFitter.hpp"
 #include "ucn/templates/PulseTemplates.hpp"
+#include "ucn/debug/DebugCsvWriter.hpp"
 
 #include <vector>
+#include <memory>
 
 namespace ucn {
 
@@ -13,8 +15,6 @@ class WindowedPulseProcessor {
 public:
     WindowedPulseProcessor(const PulseTemplate& pulse_template,
                            const GreedyLRTFitter& fitter);
-
-    void set_debug_max_windows(int n);
 
     RegionResult analyze(const std::vector<Hit>& hits,
                          double background_start_us,
@@ -24,9 +24,12 @@ public:
                          double end_start_us,
                          double end_end_us,
                          const RegionSettings& region_settings,
-                         const FitSettings& fit_settings) const;
+                         const FitSettings& fit_settings,
+                         const std::vector<debug::TruthPulse>* truth_pulses = nullptr,
+                         int chunk_index = -1,
+                         int global_window_offset = 0) const;
 
-    void set_progress_enabled(bool enabled);
+    void set_debug_writer(std::shared_ptr<debug::DebugCsvWriter> writer);
 
 private:
     std::vector<Hit> select_hits(const std::vector<Hit>& hits,
@@ -57,13 +60,15 @@ private:
                     const FitSettings& fit_settings,
                     double background_rate_hz,
                     std::vector<TaggedPulse>& output_pulses,
-                    std::vector<WindowSummary>& output_summaries) const;
+                    std::vector<WindowSummary>& output_summaries,
+                    const std::vector<debug::TruthPulse>* truth_pulses,
+                    int chunk_index,
+                    int global_window_offset) const;
+
+    std::shared_ptr<debug::DebugCsvWriter> debug_writer_;
 
     const PulseTemplate& pulse_template_;
     const GreedyLRTFitter& fitter_;
-    int debug_max_windows_ = -1;
-
-    bool progress_enabled_ = false;
 };
 
 } // namespace ucn

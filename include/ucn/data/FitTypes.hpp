@@ -52,7 +52,6 @@ struct FitSettings {
     double local_evidence_post_us = 2.0;
     double local_delta_nll_cut = 3.0;
 
-    bool debug = false;
     std::vector<double> fixed_expected;
 };
 

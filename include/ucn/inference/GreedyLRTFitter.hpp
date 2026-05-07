@@ -1,6 +1,7 @@
 #pragma once
 #include "ucn/data/FitTypes.hpp"
 #include "ucn/templates/PulseTemplates.hpp"
+#include "ucn/debug/DebugTypes.hpp"
 #include <span>
 #include <vector>
 
@@ -14,7 +15,9 @@ public:
     FitResult fit(
         const Histogram& histogram,
         std::span<const double> coincidence_times_us,
-        const FitSettings& settings
+        const FitSettings& settings,
+        ucn::debug::DebugSink* debug_sink = nullptr,
+        const std::string& debug_case_id = ""
     ) const;
 
 private:
