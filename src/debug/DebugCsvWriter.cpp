@@ -113,7 +113,7 @@ void DebugCsvWriter::write_window(
         const double fixed = (i < static_cast<int>(fixed_expected.size())) ? fixed_expected[i] : 0.0;
         const double fit_exp = (i < static_cast<int>(fit.expected_total.size())) ? fit.expected_total[i] : 0.0;
         const double bg = background_per_bin;
-        const double total = fit_exp;
+        const double total = fixed + bg + fit_exp;
         const double resid = obs - total;
 
         bins_ << ctx.case_id << ','
@@ -142,7 +142,7 @@ void DebugCsvWriter::write_window(
                  << ctx.truth_pulses[i].amplitude_pe << '\n';
     }
 
-    for (std::size_t p = 0; i < fit.pulses.size(); ++p) {
+    for (std::size_t p = 0; p < fit.pulses.size(); ++p) {
         const auto& pulse = fit.pulses[p];
 
         markers_ << ctx.case_id << ",fit," << p << ','

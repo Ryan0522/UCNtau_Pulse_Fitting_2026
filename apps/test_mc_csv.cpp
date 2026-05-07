@@ -3,6 +3,7 @@
 #include "ucn/templates/GaussianTripPulseTemplate.hpp"
 #include "ucn/templates/GaussianQuadPulseTemplate.hpp"
 #include "ucn/io/AnalysisConfig.hpp"
+#include "ucn/debug/DebugCsvWriter.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -40,19 +41,43 @@ std::vector<ucn::Hit> load_mc_hits(const std::string& path) {
     return hits;
 }
 
-int main(int argc, char** argv) {
-    if (argc < 4) {
-        std::cerr << "Usage: test_mc_csv <config.json> <input_hits.csv> "
-                     "<output postfix> [--progress]\n";
-        return 1;
+std::vector<ucn::debug::TruthPulse> load_mc_truth(const std::string& path) {
+    std::vector<ucn::debug::TruthPulse> truth;
+
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("Could not open MC truth CSV: " + path);
     }
 
-    bool show_progress = false;
-    for (int a = 4; a < argc; ++a) {
-        std::string arg = argv[a];
-        if (arg == "--progress") {
-            show_progress = true;
-        }
+    std::string line;
+    std::getline(file, line); // header
+
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string t_str;
+        std::string amp_str;
+
+        if (!std::getline(ss, t_str, ',')) continue;
+        if (!std::getline(ss, amp_str, ',')) amp_str = "0.0";
+
+        ucn::debug::TruthPulse p;
+        p.time_us = std::stod(t_str);
+        p.amplitude_pe = std::stod(amp_str);
+        truth.push_back(p);
+    }
+
+    std::sort(truth.begin(), truth.end(),
+              [](const auto& a, const auto& b) {
+                  return a.time_us < b.time_us;
+              });
+
+    return truth;
+}
+
+int main(int argc, char** argv) {
+    if (argc != 5) {
+        std::cerr << "Usage: test_mc_csv <config.json> <input_hits.csv> <truth.csv> <output postfix>\n";
+        return 1;
     }
 
     try {
@@ -76,11 +101,25 @@ int main(int argc, char** argv) {
 
         ucn::GreedyLRTFitter fitter(pulse_template);
         ucn::WindowedPulseProcessor processor(pulse_template, fitter);
-        processor.set_progress_enabled(show_progress);
-        processor.set_debug_max_windows(cfg.debug_max_windows);
+
+        std::shared_ptr<ucn::debug::DebugCsvWriter> debug_writer;
 
         std::vector<ucn::Hit> hits = load_mc_hits(argv[2]);
-        std::cout << "Loaded " << hits.size() << " hits from MC CSV.\n";
+        std::vector<ucn::debug::TruthPulse> truth = load_mc_truth(argv[3]);
+        std::string postfix = argv[4];
+
+        if (cfg.debug_max_windows > 0 && cfg.shard_index == 0) {
+            const std::filesystem::path debug_dir =
+                std::filesystem::path("test") / "debug" / postfix / "task_000";
+
+            debug_writer = std::make_shared<ucn::debug::DebugCsvWriter>(
+                debug_dir,
+                cfg.debug_max_windows,
+                pulse_template
+            );
+
+            processor.set_debug_writer(debug_writer);
+        }
 
         if (hits.empty()) {
             std::cerr << "No hits found.\n";
@@ -89,7 +128,6 @@ int main(int argc, char** argv) {
 
         std::filesystem::create_directories("test");
 
-        std::string postfix = argv[3];
         std::string pulse_file = "test/fit_results_seg" + postfix + ".csv";
         std::string window_file = "test/win_summaries_seg" + postfix + ".csv";
 
@@ -156,7 +194,10 @@ int main(int argc, char** argv) {
                 end_start,
                 end_end,
                 cfg.region_settings,
-                cfg.fit_settings
+                cfg.fit_settings,
+                &truth,
+                chunk,
+                global_window_offset
             );
 
             for (const auto& p : result.signal_pulses) {

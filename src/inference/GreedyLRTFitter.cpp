@@ -313,7 +313,9 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
 FitResult GreedyLRTFitter::fit(
     const Histogram& histogram,
     std::span<const double> coincidence_times_us,
-    const FitSettings& settings
+    const FitSettings& settings,
+    ucn::debug::DebugSink* debug_sink,
+    const std::string& debug_case_id
 ) const {
     if (histogram.bin_edges_us.size() != histogram.counts.size() + 1) {
         throw std::invalid_argument("Histogram bin_edges_us must have size counts.size() + 1.");
@@ -456,6 +458,25 @@ FitResult GreedyLRTFitter::fit(
                 const double margin = local_pass ? (delta - required_delta)
                                                  : -std::numeric_limits<double>::infinity();
 
+                if (debug_sink && !debug_case_id.empty()) {
+                    ucn::debug::LRTTrialDebug row;
+                    row.case_id = debug_case_id;
+                    row.fit_iter = fit_iter;
+                    row.cluster_index = static_cast<int>(cluster_index);
+                    row.trial_time_us = time_us;
+                    row.trial_amp = candidate_refit_amp;
+                    row.nll_before = result.final_nll;
+                    row.nll_after = trial_nll;
+                    row.delta_nll = delta;
+                    row.penalty_nll = penalty;
+                    row.required_delta_nll = required_delta;
+                    row.local_delta_nll = local_delta;
+                    row.local_pass = local_pass ? 1 : 0;
+                    row.margin = margin;
+                    row.accepted = 0;
+                    debug_sink->on_lrt_trial(row);
+                }
+
                 if (margin > best_margin) {
                     best_margin = margin;
                     best_delta = delta;
@@ -479,6 +500,32 @@ FitResult GreedyLRTFitter::fit(
         if (!settings.allow_multiple_fits_per_cluster &&
             best_cluster_index >= 0) {
             cluster_used[static_cast<std::size_t>(best_cluster_index)] = true;
+        }
+
+        if (debug_sink && !debug_case_id.empty()) {
+            ucn::debug::LRTTrialDebug row;
+            row.case_id = debug_case_id;
+            row.fit_iter = fit_iter;
+            row.cluster_index = best_cluster_index;
+            row.trial_time_us = best_time;
+            row.trial_amp = best_amplitude;
+            row.nll_before = result.final_nll;
+            row.nll_after = best_expected.empty()
+                ? result.final_nll
+                : likelihood::poisson_nll(
+                    histogram.counts,
+                    best_expected,
+                    settings.fixed_expected,
+                    settings.background_per_bin
+                );
+            row.delta_nll = best_delta;
+            row.penalty_nll = best_penalty;
+            row.required_delta_nll = best_required_delta;
+            row.local_delta_nll = best_local_delta;
+            row.local_pass = 1;
+            row.margin = best_margin;
+            row.accepted = 1;
+            debug_sink->on_lrt_accept(row);
         }
 
         result.pulses.push_back(PulseCandidate{best_time, best_amplitude});

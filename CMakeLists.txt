@@ -39,6 +39,7 @@ add_library(ucn_core
     src/inference/CoincidenceFitter.cpp
     src/app/WindowedPulseProcessor.cpp
     src/app/BatchAnalysisRunner.cpp
+    src/debug/DebugCsvWriter.cpp
     src/io/AnalysisConfig.cpp
     src/io/RootRunLoader.cpp
 )
