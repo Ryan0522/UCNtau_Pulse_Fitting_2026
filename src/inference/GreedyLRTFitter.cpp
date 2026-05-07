@@ -458,7 +458,7 @@ FitResult GreedyLRTFitter::fit(
                 const double margin = local_pass ? (delta - required_delta)
                                                  : -std::numeric_limits<double>::infinity();
 
-                if (debug_sink && !debug_case_id.empty()) {
+                if (debug_sink) {
                     ucn::debug::LRTTrialDebug row;
                     row.case_id = debug_case_id;
                     row.fit_iter = fit_iter;
@@ -502,7 +502,7 @@ FitResult GreedyLRTFitter::fit(
             cluster_used[static_cast<std::size_t>(best_cluster_index)] = true;
         }
 
-        if (debug_sink && !debug_case_id.empty()) {
+        if (debug_sink) {
             ucn::debug::LRTTrialDebug row;
             row.case_id = debug_case_id;
             row.fit_iter = fit_iter;

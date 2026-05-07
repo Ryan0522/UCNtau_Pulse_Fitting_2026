@@ -6,6 +6,7 @@
 #include "ucn/templates/GaussianTripPulseTemplate.hpp"
 #include "ucn/templates/GaussianQuadPulseTemplate.hpp"
 #include "ucn/templates/EmpiricalPulseTemplate.hpp"
+#include "ucn/debug/DebugCsvWriter.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -531,6 +532,21 @@ void BatchAnalysisRunner::run() const {
 
     GreedyLRTFitter fitter(*pulse_template);
     WindowedPulseProcessor processor(*pulse_template, fitter);
+    
+    std::shared_ptr<debug::DebugCsvWriter> debug_writer;
+
+    if (cfg_.debug_max_windows > 0 && cfg_.shard_index == 0) {
+        const fs::path debug_dir = out_dir / "debug";
+
+        debug_writer = std::make_shared<debug::DebugCsvWriter>(
+            debug_dir,
+            cfg_.debug_max_windows,
+            *pulse_template
+        );
+
+        processor.set_debug_writer(debug_writer);
+    }
+    
     CoincidenceFitter coincidence_fitter(cfg_.coincidence_settings);
 
     std::cout << "Selected " << all_runs.size() << " production/good runs total.\n"

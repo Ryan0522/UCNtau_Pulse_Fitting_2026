@@ -7,6 +7,28 @@ namespace fs = std::filesystem;
 
 namespace ucn::debug {
 
+namespace {
+
+void write_lrt_row(std::ofstream& out, const LRTTrialDebug& r) {
+    out << r.case_id << ','
+        << r.fit_iter << ','
+        << r.cluster_index << ','
+        << std::setprecision(17)
+        << r.trial_time_us << ','
+        << r.trial_amp << ','
+        << r.nll_before << ','
+        << r.nll_after << ','
+        << r.delta_nll << ','
+        << r.penalty_nll << ','
+        << r.required_delta_nll << ','
+        << r.local_delta_nll << ','
+        << r.local_pass << ','
+        << r.margin << ','
+        << r.accepted << '\n';
+}
+
+} // namespace
+
 DebugCsvWriter::DebugCsvWriter(
     const fs::path& out_dir,
     int max_per_case,
@@ -176,43 +198,42 @@ void DebugCsvWriter::write_window(
 
 void DebugCsvWriter::on_lrt_trial(const LRTTrialDebug& r) {
     if (!enabled_) return;
-
-    lrt_trials_ << r.case_id << ','
-                << r.fit_iter << ','
-                << r.cluster_index << ','
-                << std::setprecision(17)
-                << r.trial_time_us << ','
-                << r.trial_amp << ','
-                << r.nll_before << ','
-                << r.nll_after << ','
-                << r.delta_nll << ','
-                << r.penalty_nll << ','
-                << r.required_delta_nll << ','
-                << r.local_delta_nll << ','
-                << r.local_pass << ','
-                << r.margin << ','
-                << r.accepted << '\n';
+    write_lrt_row(lrt_trials_, r);
 }
 
 void DebugCsvWriter::on_lrt_accept(const LRTTrialDebug& r) {
     if (!enabled_) return;
-
-    lrt_accepts_ << r.case_id << ','
-                 << r.fit_iter << ','
-                 << r.cluster_index << ','
-                 << std::setprecision(17)
-                 << r.trial_time_us << ','
-                 << r.trial_amp << ','
-                 << r.nll_before << ','
-                 << r.nll_after << ','
-                 << r.delta_nll << ','
-                 << r.penalty_nll << ','
-                 << r.required_delta_nll << ','
-                 << r.local_delta_nll << ','
-                 << r.local_pass << ','
-                 << r.margin << ','
-                 << r.accepted << '\n';
+    write_lrt_row(lrt_accepts_, r);
 }
 
+bool DebugCsvWriter::can_capture_any_observed() const {
+    return can_capture(DebugCaseType::ObservedOneSeedOneFit) ||
+           can_capture(DebugCaseType::ObservedOneSeedMultiFit) ||
+           can_capture(DebugCaseType::ObservedMultiSeed);
+}
+
+void DebugCsvWriter::write_lrt_trials_for_case(
+    const std::string& case_id,
+    const std::vector<LRTTrialDebug>& rows
+) {
+    if (!enabled_) return;
+
+    for (LRTTrialDebug row : rows) {
+        row.case_id = case_id;
+        write_lrt_row(lrt_trials_, row);
+    }
+}
+
+void DebugCsvWriter::write_lrt_accepts_for_case(
+    const std::string& case_id,
+    const std::vector<LRTTrialDebug>& rows
+) {
+    if (!enabled_) return;
+
+    for (LRTTrialDebug row : rows) {
+        row.case_id = case_id;
+        write_lrt_row(lrt_accepts_, row);
+    }
+}
 
 } // namespace ucn::debug

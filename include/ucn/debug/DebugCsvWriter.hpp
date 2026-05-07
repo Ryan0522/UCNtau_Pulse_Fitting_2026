@@ -17,6 +17,7 @@ public:
     bool enabled() const { return enabled_; }
 
     bool can_capture(DebugCaseType type) const;
+    bool can_capture_any_observed() const;
 
     std::string next_case_id(DebugCaseType type);
 
