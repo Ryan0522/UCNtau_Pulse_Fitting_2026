@@ -44,6 +44,7 @@ struct TruthPulse {
 struct WindowDebugContext {
     std::string case_id;
     DebugCaseType case_type = DebugCaseType::Unknown;
+    std::string region = "";
 
     int chunk_index = -1;
     int local_window_index = -1;
@@ -60,6 +61,7 @@ struct WindowDebugContext {
 
 struct LRTTrialDebug {
     std::string case_id;
+    std::string status = "";
 
     int fit_iter = -1;
     int cluster_index = -1;

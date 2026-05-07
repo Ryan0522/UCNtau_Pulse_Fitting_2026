@@ -11,6 +11,7 @@ namespace {
 
 void write_lrt_row(std::ofstream& out, const LRTTrialDebug& r) {
     out << r.case_id << ','
+        << r.status << ','
         << r.fit_iter << ','
         << r.cluster_index << ','
         << std::setprecision(17)
@@ -56,7 +57,7 @@ DebugCsvWriter::DebugCsvWriter(
 }
 
 void DebugCsvWriter::write_headers() {
-    manifest_ << "case_id,case_type,chunk_index,local_window_index,global_window_index,"
+    manifest_ << "case_id,case_type,region,chunk_index,local_window_index,global_window_index,"
               << "start_time_us,end_time_us,model_end_time_us,bin_width_us,n_bins,"
               << "observed_count,expected_count,seed_count,truth_count,pulse_count,final_nll\n";
 
@@ -68,11 +69,11 @@ void DebugCsvWriter::write_headers() {
     components_ << "case_id,pulse_index,bin_index,center_us,amplitude_pe,"
                 << "unit_template,component_expected\n";
 
-    lrt_trials_ << "case_id,fit_iter,cluster_index,trial_time_us,trial_amp,"
+    lrt_trials_ << "case_id,status,fit_iter,cluster_index,trial_time_us,trial_amp,"
                 << "nll_before,nll_after,delta_nll,penalty_nll,required_delta_nll,"
                 << "local_delta_nll,local_pass,margin,accepted\n";
 
-    lrt_accepts_ << "case_id,fit_iter,cluster_index,trial_time_us,trial_amp,"
+    lrt_accepts_ << "case_id,status,fit_iter,cluster_index,trial_time_us,trial_amp,"
                  << "nll_before,nll_after,delta_nll,penalty_nll,required_delta_nll,"
                  << "local_delta_nll,local_pass,margin,accepted\n";
 }
@@ -110,6 +111,7 @@ void DebugCsvWriter::write_window(
 
     manifest_ << ctx.case_id << ','
               << case_name(ctx.case_type) << ','
+              << ctx.region << ','
               << ctx.chunk_index << ','
               << ctx.local_window_index << ','
               << ctx.global_window_index << ','

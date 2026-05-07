@@ -286,7 +286,8 @@ void WindowedPulseProcessor::fit_stream(
     std::vector<WindowSummary>& output_summaries,
     const std::vector<debug::TruthPulse>* truth_pulses,
     int chunk_index,
-    int global_window_offset
+    int global_window_offset,
+    const std::string& region_name
 ) const {
     std::vector<PulseCandidate> carry_pulses;
 
@@ -352,6 +353,7 @@ void WindowedPulseProcessor::fit_stream(
         }
 
         const bool has_truth = (truth_pulses != nullptr);
+        const bool allow_debug_this_region = (region_name == "signal");
 
         std::vector<debug::TruthPulse> truth_here;
         debug::DebugCaseType prefit_case_type = debug::DebugCaseType::Unknown;
@@ -364,7 +366,7 @@ void WindowedPulseProcessor::fit_stream(
         std::unique_ptr<debug::BufferedDebugSink> buffered_sink;
         debug::DebugSink* sink_for_fit = nullptr;
 
-        if (debug_writer_ && debug_writer_->enabled()) {
+        if (allow_debug_this_region && debug_writer_ && debug_writer_->enabled()) {
             if (has_truth) {
                 truth_here = select_truth_in_window(
                     truth_pulses, start_time_us, model_end_time_us
@@ -391,13 +393,9 @@ void WindowedPulseProcessor::fit_stream(
         window_fit_settings.background_per_bin = background_rate_hz * bin_width_us * 1.0e-6;
         window_fit_settings.fixed_expected = fixed_expected;
 
-        auto fit_t0 = std::chrono::steady_clock::now();
-
         FitResult fit = fitter_.fit(
             histogram, seeds, window_fit_settings, sink_for_fit, prefit_case_id
         );
-
-        auto fit_t1 = std::chrono::steady_clock::now();
 
         if (fit.pulses.empty()) {
             i = next_index;
@@ -409,6 +407,7 @@ void WindowedPulseProcessor::fit_stream(
             debug::WindowDebugContext ctx;
             ctx.case_id = prefit_case_id;
             ctx.case_type = prefit_case_type;
+            ctx.region = region_name;
             ctx.chunk_index = chunk_index;
             ctx.local_window_index = window_index;
             ctx.global_window_index = global_window_offset + window_index;
@@ -443,6 +442,7 @@ void WindowedPulseProcessor::fit_stream(
                 debug::WindowDebugContext ctx;
                 ctx.case_id = observed_case_id;
                 ctx.case_type = observed_case_type;
+                ctx.region = region_name;
                 ctx.chunk_index = chunk_index;
                 ctx.local_window_index = window_index;
                 ctx.global_window_index = global_window_offset + window_index;
@@ -568,7 +568,7 @@ RegionResult WindowedPulseProcessor::analyze(
                        background_rate_hz,
                        background_pulses,
                        background_summaries,
-                       nullptr, -1, 0);
+                       nullptr, -1, 0, "background");
 
             double fitted_pe_sum = 0.0;
             for (const TaggedPulse& pulse : background_pulses) {
@@ -604,7 +604,8 @@ RegionResult WindowedPulseProcessor::analyze(
                result.signal_window_summaries,
                truth_pulses,
                chunk_index,
-               global_window_offset);
+               global_window_offset,
+               "signal");
 
     fit_stream(end_hits,
                region_settings,
@@ -612,7 +613,7 @@ RegionResult WindowedPulseProcessor::analyze(
                background_rate_hz,
                result.end_pulses,
                result.end_window_summaries,
-               nullptr, -1, 0);
+               nullptr, -1, 0, "end");
 
     result.background_rate_hz = background_rate_hz;
     return result;

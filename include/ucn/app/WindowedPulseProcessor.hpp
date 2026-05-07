@@ -8,6 +8,7 @@
 
 #include <vector>
 #include <memory>
+#include <string>
 
 namespace ucn {
 
@@ -63,7 +64,8 @@ private:
                     std::vector<WindowSummary>& output_summaries,
                     const std::vector<debug::TruthPulse>* truth_pulses,
                     int chunk_index,
-                    int global_window_offset) const;
+                    int global_window_offset,
+                    const std::string& region_name) const;
 
     std::shared_ptr<debug::DebugCsvWriter> debug_writer_;
 
