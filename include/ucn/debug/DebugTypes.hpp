@@ -45,6 +45,7 @@ struct WindowDebugContext {
     std::string case_id;
     DebugCaseType case_type = DebugCaseType::Unknown;
     std::string region = "";
+    double hold_time_s = -1.0;
 
     int chunk_index = -1;
     int local_window_index = -1;

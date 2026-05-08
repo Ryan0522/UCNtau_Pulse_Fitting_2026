@@ -212,6 +212,12 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<double>(r, "fit_start_padding_us", cfg.region_settings.fit_start_padding_us);
         cfg.region_settings.fit_end_padding_us =
             get_or<double>(r, "fit_end_padding_us", cfg.region_settings.fit_end_padding_us);
+        cfg.region_settings.window_mode = 
+            get_or<std::string>(r, "window_mode", cfg.region_settings.window_mode);
+        cfg.region_settings.fixed_seed_pretrigger_us = 
+            get_or<double>(r, "fixed_seed_pretrigger_us", cfg.region_settings.fixed_seed_pretrigger_us);
+        cfg.region_settings.fixed_seed_window_us = 
+            get_or<double>(r, "fixed_seed_window_us", cfg.region_settings.fixed_seed_window_us);
         cfg.region_settings.coincidence_window_us =
             get_or<double>(r, "coincidence_window_us", cfg.region_settings.coincidence_window_us);
         cfg.region_settings.coincidence_min_hits =

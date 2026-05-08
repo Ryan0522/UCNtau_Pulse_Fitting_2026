@@ -18,11 +18,11 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "debug_cfwin_emp_10nll_gap150_pad10_150_5PE_bg_nofe_nomulti_noprune_epoch1",
+  "array_output_subdir": "debug_cfwin_emp_10nll_fw500_pad10_150_5PE_bg_nofe_nomulti_noprune_epoch1",
   "shard_index": 0,
   "num_shards": 1,
 
-  "debug_max_windows": 100,
+  "debug_max_windows": 50,
 
   "enable_coincidence_output": true,
 
@@ -67,11 +67,14 @@
   },
 
   "region_settings": {
+    "window_mode": "fixed_seed_window",
+    "fixed_seed_pretrigger_us": 10.0,
+    "fixed_seed_window_us": 500.0,
     "coarse_bin_width_us": 0.5,
     "fine_bin_width_us": 0.25,
-    "min_gap_us": 150.0,
+    "min_gap_us": 500.0,
     "fit_start_padding_us": 10.0,
-    "fit_end_padding_us": 150.0,
+    "fit_end_padding_us": 500.0,
     "coincidence_window_us": 0.05,
     "coincidence_min_hits": 2,
     "seed_veto_window_us": 1.0,

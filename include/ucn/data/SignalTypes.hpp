@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <string>
 
 namespace ucn
 {
@@ -15,11 +16,23 @@ struct WindowSummary {
     double end_time_us = 0.0;
     double width_us = 0.0;
     double bin_width_us = 0.0;
+
     int pulse_count = 0;
+    int seed_count = 0;
+
     int observed_count = 0;
     double expected_count = 0.0;
     double final_nll = 0.0;
-    int seed_count = 0;
+
+    double fitted_pe_sum = 0.0;
+    double fit_expected_sum = 0.0;
+    double fixed_expected_sum = 0.0;
+    double background_expected_sum = 0.0;
+
+    double template_mass_in_window = 0.0;
+    double pe_per_observed_count = 0.0;
+    double background_fraction = 0.0;
+    double fit_fraction = 0.0;
 };
 
 struct TaggedPulse {
@@ -40,6 +53,11 @@ struct RegionSettings {
 
     double fit_start_padding_us = 20.0;
     double fit_end_padding_us = 100.0;
+
+    std::string window_mode = "telescoping";
+    double fixed_seed_pretrigger_us = 10.0;
+    double fixed_seed_window_us = 500.0;
+
     double coincidence_window_us = 0.1;
     int coincidence_min_hits = 2;
     double seed_veto_window_us = 2.0;

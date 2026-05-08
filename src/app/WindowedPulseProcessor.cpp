@@ -10,6 +10,10 @@
 namespace ucn {
 namespace {
 
+double sum_vector(const std::vector<double>& xs) {
+    return std::accumulate(xs.begin(), xs.end(), 0.0);
+}
+
 double compute_log_likelihood(const std::vector<double>& counts,
                               const std::vector<double>& expected) {
     double log_l = 0.0;
@@ -150,23 +154,64 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
 
     const double seed_time_us = hits[seed_index].time_us;
 
-    // Telescoping until gap > min_gap_us
     int j = seed_index + 1;
-    while (j < n_hits) {
-        const double gap = hits[j].time_us - hits[j - 1].time_us;
-        if (gap > region_settings.min_gap_us) break;
-        ++j;
-    }
-    const double last_hit_time_us = hits[j - 1].time_us;
+    double last_hit_time_us = hits[seed_index].time_us;
 
-    // Pre-pad nad post-pad
-    const double prepad_us = std::max(0.0, region_settings.fit_start_padding_us);
-    const double postpad_us = std::max(0.0, region_settings.fit_end_padding_us);
+    if (region_settings.window_mode == "fixed_seed_window") {
+        const double prepad_us = std::max(0.0, region_settings.fixed_seed_pretrigger_us);
+        const double fixed_window_us = std::max(bin_width_us, region_settings.fixed_seed_window_us);
     
-    start_time_us = seed_time_us - prepad_us;
-    end_time_us = last_hit_time_us;
-    model_end_time_us = last_hit_time_us + postpad_us;
-    next_index = j;
+        start_time_us = seed_time_us - prepad_us;
+        double current_window_end_us = seed_time_us + fixed_window_us;
+        j = seed_index + 1;
+        last_hit_time_us = hits[seed_index].time_us;
+
+        while (j < n_hits && hits[j].time_us < current_window_end_us) {
+            const double t0 = hits[j].time_us;
+            const int ch0 = hits[j].channel;
+
+            last_hit_time_us = t0;
+            bool armed = false;
+            int total = 1;
+
+            for (int k = j + 1; k < n_hits; ++k) {
+                const double dt = hits[k].time_us - t0;
+                if (dt > region_settings.coincidence_window_us) {
+                    break;
+                }
+                if (hits[k].channel != ch0) {
+                    armed = true;
+                }
+                ++total;
+            }
+            if (armed && total >= region_settings.coincidence_min_hits) {
+                current_window_end_us = t0 + fixed_window_us;
+            }
+            ++j;
+        }
+
+        end_time_us = current_window_end_us;
+        model_end_time_us = current_window_end_us;
+        next_index = j;
+
+    } else {
+        while (j < n_hits) {
+            const double gap = hits[j].time_us - hits[j - 1].time_us;
+            if (gap > region_settings.min_gap_us) break;
+            ++j;
+        }
+
+        last_hit_time_us = hits[j - 1].time_us;
+
+        const double prepad_us =  std::max(0.0, region_settings.fit_start_padding_us);
+        const double postpad_us = std::max(0.0, region_settings.fit_end_padding_us);
+
+        start_time_us = seed_time_us - prepad_us;
+        end_time_us = last_hit_time_us;
+        model_end_time_us = last_hit_time_us + postpad_us;
+
+        next_index = j;
+    }
 
     const double model_width_us = model_end_time_us - start_time_us;
     if (model_width_us < bin_width_us) {
@@ -287,7 +332,8 @@ void WindowedPulseProcessor::fit_stream(
     const std::vector<debug::TruthPulse>* truth_pulses,
     int chunk_index,
     int global_window_offset,
-    const std::string& region_name
+    const std::string& region_name,
+    double hold_time_s
 ) const {
     std::vector<PulseCandidate> carry_pulses;
 
@@ -377,12 +423,12 @@ void WindowedPulseProcessor::fit_stream(
                 );
 
                 if (prefit_case_type != debug::DebugCaseType::Unknown &&
-                    debug_writer_->can_capture(prefit_case_type)) {
+                    debug_writer_->can_capture(prefit_case_type, hold_time_s)) {
                     mc_capture_debug = true;
-                    prefit_case_id = debug_writer_->next_case_id(prefit_case_type);
+                    prefit_case_id = debug_writer_->next_case_id(prefit_case_type, hold_time_s);
                     sink_for_fit = debug_writer_.get();
                 }
-            } else if (debug_writer_->can_capture_any_observed()) {
+            } else if (debug_writer_->can_capture_any_observed(hold_time_s)) {
                 root_candidate_debug = true;
                 buffered_sink = std::make_unique<debug::BufferedDebugSink>();
                 sink_for_fit = buffered_sink.get();
@@ -435,14 +481,15 @@ void WindowedPulseProcessor::fit_stream(
                 );
 
             if (observed_case_type != debug::DebugCaseType::Unknown &&
-                debug_writer_->can_capture(observed_case_type)) {
+                debug_writer_->can_capture(observed_case_type, hold_time_s)) {
                 const std::string observed_case_id =
-                    debug_writer_->next_case_id(observed_case_type);
+                    debug_writer_->next_case_id(observed_case_type, hold_time_s);
 
                 debug::WindowDebugContext ctx;
                 ctx.case_id = observed_case_id;
                 ctx.case_type = observed_case_type;
                 ctx.region = region_name;
+                ctx.hold_time_s = hold_time_s;
                 ctx.chunk_index = chunk_index;
                 ctx.local_window_index = window_index;
                 ctx.global_window_index = global_window_offset + window_index;
@@ -484,7 +531,20 @@ void WindowedPulseProcessor::fit_stream(
             }
         }
         double expected_sum = std::accumulate(full_expected.begin(), full_expected.end(), 0.0);
-        double observed_sum = std::accumulate(histogram.counts.begin(), histogram.counts.end(), 0.0);
+        double observed_count = std::accumulate(histogram.counts.begin(), histogram.counts.end(), 0.0);
+
+        double fitted_pe_sum = 0.0;
+        for (const auto& p : fit.pulses) {
+            fitted_pe_sum += p.amplitude_pe;
+        }
+        const double fit_expected_sum = sum_vector(fit.expected_total);
+        const double fixed_expected_sum = sum_vector(window_fit_settings.fixed_expected);
+        const double background_expected_sum = window_fit_settings.background_per_bin * static_cast<double>(histogram.counts.size());
+
+        const double template_mass_in_window = fitted_pe_sum > 0.0 ? fit_expected_sum / fitted_pe_sum : 0.0;
+        const double pe_per_observed_count = observed_count > 0 ? fitted_pe_sum / static_cast<double>(observed_count) : 0.0;
+        const double background_fraction = observed_count > 0 ? background_expected_sum / static_cast<double>(observed_count) : 0.0;
+        const double fit_fraction = observed_count > 0 ? fit_expected_sum / static_cast<double>(observed_count) : 0.0;
 
         WindowSummary summary;
         summary.window_index = window_index;
@@ -493,10 +553,18 @@ void WindowedPulseProcessor::fit_stream(
         summary.width_us = end_time_us - start_time_us;
         summary.bin_width_us = bin_width_us;
         summary.pulse_count = static_cast<int>(fit.pulses.size());
-        summary.observed_count = static_cast<int>(std::llround(observed_sum));
+        summary.seed_count = static_cast<int>(seeds.size());
+        summary.observed_count = static_cast<int>(std::llround(observed_count));
         summary.expected_count = expected_sum;
         summary.final_nll = -compute_log_likelihood(histogram.counts, full_expected);
-        summary.seed_count = static_cast<int>(seeds.size());
+        summary.fitted_pe_sum = fitted_pe_sum;
+        summary.fit_expected_sum = fit_expected_sum;
+        summary.fixed_expected_sum = fixed_expected_sum;
+        summary.background_expected_sum = background_expected_sum;
+        summary.template_mass_in_window = template_mass_in_window;
+        summary.pe_per_observed_count = pe_per_observed_count;
+        summary.background_fraction = background_fraction;
+        summary.fit_fraction = fit_fraction;
         output_summaries.push_back(summary);
 
         double template_support_us = static_cast<double>(pulse_template_.pmf().size()) * pulse_template_.native_bin_width_us();
@@ -538,7 +606,8 @@ RegionResult WindowedPulseProcessor::analyze(
     const FitSettings& fit_settings,
     const std::vector<debug::TruthPulse>* truth_pulses,
     int chunk_index,
-    int global_window_offset
+    int global_window_offset,
+    double hold_time_s
 ) const {
     RegionResult result;
 
@@ -568,7 +637,7 @@ RegionResult WindowedPulseProcessor::analyze(
                        background_rate_hz,
                        background_pulses,
                        background_summaries,
-                       nullptr, -1, 0, "background");
+                       nullptr, -1, 0, "background", hold_time_s);
 
             double fitted_pe_sum = 0.0;
             for (const TaggedPulse& pulse : background_pulses) {
@@ -605,7 +674,8 @@ RegionResult WindowedPulseProcessor::analyze(
                truth_pulses,
                chunk_index,
                global_window_offset,
-               "signal");
+               "signal",
+               hold_time_s);
 
     fit_stream(end_hits,
                region_settings,
@@ -613,7 +683,7 @@ RegionResult WindowedPulseProcessor::analyze(
                background_rate_hz,
                result.end_pulses,
                result.end_window_summaries,
-               nullptr, -1, 0, "end");
+               nullptr, -1, 0, "end", hold_time_s);
 
     result.background_rate_hz = background_rate_hz;
     return result;

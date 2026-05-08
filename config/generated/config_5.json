@@ -14,10 +14,10 @@
   "tems_tree_name": "tems",
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
-  "array_output_subdir": "debug_cfwin_emp_10nll_gap20_pad10_150_5PE_bg_nofe_nomulti_noprune_epoch1",
+  "array_output_subdir": "debug_cfwin_emp_10nll_gap500_pad10_150_5PE_bg_local_nofe_nomulti_noprune_epoch1",
   "shard_index": 5,
   "num_shards": 32,
-  "debug_max_windows": 100,
+  "debug_max_windows": 50,
   "enable_coincidence_output": true,
   "require_tems_tree": true,
   "root_channel_map": {
@@ -56,9 +56,9 @@
   "region_settings": {
     "coarse_bin_width_us": 0.5,
     "fine_bin_width_us": 0.25,
-    "min_gap_us": 150.0,
+    "min_gap_us": 500.0,
     "fit_start_padding_us": 10.0,
-    "fit_end_padding_us": 150.0,
+    "fit_end_padding_us": 500.0,
     "coincidence_window_us": 0.05,
     "coincidence_min_hits": 2,
     "seed_veto_window_us": 1.0,
@@ -99,7 +99,7 @@
     "close_reg_tail_tau_us": 30.0,
     "close_reg_eta": 0.1,
     "close_reg_floor_pe": 1.0,
-    "enable_local_evidence": false,
+    "enable_local_evidence": true,
     "local_evidence_pre_us": 2.0,
     "local_evidence_post_us": 2.0,
     "local_delta_nll_cut": 7.0

@@ -2,12 +2,17 @@
 
 #include <iomanip>
 #include <stdexcept>
+#include <cmath>
 
 namespace fs = std::filesystem;
 
 namespace ucn::debug {
 
 namespace {
+
+int hold_key(double hold_time_s) {
+    return static_cast<int>(std::llround(hold_time_s));
+}
 
 void write_lrt_row(std::ofstream& out, const LRTTrialDebug& r) {
     out << r.case_id << ','
@@ -57,7 +62,7 @@ DebugCsvWriter::DebugCsvWriter(
 }
 
 void DebugCsvWriter::write_headers() {
-    manifest_ << "case_id,case_type,region,chunk_index,local_window_index,global_window_index,"
+    manifest_ << "case_id,case_type,region,hold_time_s,chunk_index,local_window_index,global_window_index,"
               << "start_time_us,end_time_us,model_end_time_us,bin_width_us,n_bins,"
               << "observed_count,expected_count,seed_count,truth_count,pulse_count,final_nll\n";
 
@@ -78,17 +83,23 @@ void DebugCsvWriter::write_headers() {
                  << "local_delta_nll,local_pass,margin,accepted\n";
 }
 
-bool DebugCsvWriter::can_capture(DebugCaseType type) const {
+bool DebugCsvWriter::can_capture(DebugCaseType type, double hold_time_s) const {
     if (!enabled_) return false;
-    auto it = counts_.find(type);
+
+    const auto key = std::make_tuple(type, hold_key(hold_time_s));
+    auto it = counts_.find(key);
     const int n = (it == counts_.end()) ? 0 : it->second;
     return n < max_per_case_;
 }
 
-std::string DebugCsvWriter::next_case_id(DebugCaseType type) {
-    const int n = counts_[type]++;
+std::string DebugCsvWriter::next_case_id(DebugCaseType type, double hold_time_s) {
+    const int hk = hold_key(hold_time_s);
+    const auto key = std::make_tuple(type, hk);
+    const int n = counts_[key]++;
     std::ostringstream ss;
-    ss << case_name(type) << "_" << std::setw(3) << std::setfill('0') << n;
+    ss << "ht" << hk << "_"
+       << case_name(type) << "_"
+       << std::setw(3) << std::setfill('0') << n;
     return ss.str();
 }
 
@@ -112,6 +123,7 @@ void DebugCsvWriter::write_window(
     manifest_ << ctx.case_id << ','
               << case_name(ctx.case_type) << ','
               << ctx.region << ','
+              << ctx.hold_time_s << ','
               << ctx.chunk_index << ','
               << ctx.local_window_index << ','
               << ctx.global_window_index << ','
@@ -208,10 +220,10 @@ void DebugCsvWriter::on_lrt_accept(const LRTTrialDebug& r) {
     write_lrt_row(lrt_accepts_, r);
 }
 
-bool DebugCsvWriter::can_capture_any_observed() const {
-    return can_capture(DebugCaseType::ObservedOneSeedOneFit) ||
-           can_capture(DebugCaseType::ObservedOneSeedMultiFit) ||
-           can_capture(DebugCaseType::ObservedMultiSeed);
+bool DebugCsvWriter::can_capture_any_observed(double hold_time_s) const {
+    return can_capture(DebugCaseType::ObservedOneSeedOneFit, hold_time_s) ||
+           can_capture(DebugCaseType::ObservedOneSeedMultiFit, hold_time_s) ||
+           can_capture(DebugCaseType::ObservedMultiSeed, hold_time_s);
 }
 
 void DebugCsvWriter::write_lrt_trials_for_case(

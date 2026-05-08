@@ -5,6 +5,7 @@
 #include <fstream>
 #include <map>
 #include <string>
+#include <tuple>
 
 namespace ucn::debug {
 
@@ -16,10 +17,10 @@ public:
 
     bool enabled() const { return enabled_; }
 
-    bool can_capture(DebugCaseType type) const;
-    bool can_capture_any_observed() const;
+    bool can_capture(DebugCaseType type, double hold_time_s) const;
+    bool can_capture_any_observed(double hold_time_s) const;
 
-    std::string next_case_id(DebugCaseType type);
+    std::string next_case_id(DebugCaseType type, double hold_time_s);
 
     void write_window(
         const WindowDebugContext& ctx,
@@ -48,7 +49,7 @@ private:
 
     const PulseTemplate& pulse_template_;
 
-    std::map<DebugCaseType, int> counts_;
+    std::map<std::tuple<DebugCaseType, int>, int> counts_;
 
     std::ofstream manifest_;
     std::ofstream bins_;

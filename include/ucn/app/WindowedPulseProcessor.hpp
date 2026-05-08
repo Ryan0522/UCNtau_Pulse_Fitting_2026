@@ -28,7 +28,8 @@ public:
                          const FitSettings& fit_settings,
                          const std::vector<debug::TruthPulse>* truth_pulses = nullptr,
                          int chunk_index = -1,
-                         int global_window_offset = 0) const;
+                         int global_window_offset = 0,
+                         double hold_time_s = -1.0) const;
 
     void set_debug_writer(std::shared_ptr<debug::DebugCsvWriter> writer);
 
@@ -65,7 +66,8 @@ private:
                     const std::vector<debug::TruthPulse>* truth_pulses,
                     int chunk_index,
                     int global_window_offset,
-                    const std::string& region_name) const;
+                    const std::string& region_name,
+                    double hold_time_s) const;
 
     std::shared_ptr<debug::DebugCsvWriter> debug_writer_;
 

@@ -154,7 +154,11 @@ void write_coincidence_header(std::ofstream& out) {
 void write_window_header(std::ofstream& out) {
     out << "run,segment,hold_time_s,region,window_index,"
            "start_time_us,end_time_us,width_us,bin_width_us,"
-           "pulse_count,seed_count,observed_count,expected_count,final_nll\n";
+           "pulse_count,seed_count,observed_count,expected_count,final_nll,"
+           "fitted_pe_sum,fit_expected_sum,fixed_expected_sum,"
+           "background_expected_sum,"
+           "template_mass_in_window,pe_per_observed_count,"
+           "background_fraction,fit_fraction\n";
 }
 
 void write_tail_pulse_header(std::ofstream& out) {
@@ -265,7 +269,15 @@ void append_window_rows(std::ofstream& out,
             << w.seed_count << ','
             << w.observed_count << ','
             << w.expected_count << ','
-            << w.final_nll << '\n';
+            << w.final_nll << ','
+            << w.fitted_pe_sum << ','
+            << w.fit_expected_sum << ','
+            << w.fixed_expected_sum << ','
+            << w.background_expected_sum << ','
+            << w.template_mass_in_window << ','
+            << w.pe_per_observed_count << ','
+            << w.background_fraction << ','
+            << w.fit_fraction << '\n';
     }
 }
 
@@ -591,7 +603,8 @@ void BatchAnalysisRunner::run() const {
                     window.end_start_us,
                     window.end_end_us,
                     cfg_.region_settings,
-                    cfg_.fit_settings
+                    cfg_.fit_settings,
+                    nullptr, -1, 0, hold_time_s
                 );
 
                 summary_out << loaded.run_id << ','

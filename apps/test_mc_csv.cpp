@@ -137,10 +137,13 @@ int main(int argc, char** argv) {
         out << std::fixed << std::setprecision(3);
         win_out << std::fixed << std::setprecision(3);
 
-        out << "time_us,amplitude_pe,is_pileup,window_index\n";
-        win_out << "window_index,final_nll,seed_count,pulse_count,"
-                   "observed_count,expected_count,start_time_us,end_time_us,"
-                   "chunk_index\n";
+        out << "window_index,final_nll,seed_count,pulse_count,"
+               "observed_count,expected_count,start_time_us,end_time_us,"
+               "fitted_pe_sum,fit_expected_sum,fixed_expected_sum,"
+               "background_expected_sum,model_expected_sum,"
+               "template_mass_in_window,pe_per_observed_count,"
+               "background_fraction,fit_fraction,"
+               "chunk_index\n";
 
         // MC signal starts at 10 s.
         const double start_us = 10.0e6;
@@ -151,6 +154,8 @@ int main(int argc, char** argv) {
 
         // Safeguard chunk size.
         const double chunk_s = 60.0;
+
+        const double hold_time_s = -1.0;
 
         const int n_chunks = static_cast<int>(
             std::ceil(total_signal_s / chunk_s)
@@ -197,7 +202,8 @@ int main(int argc, char** argv) {
                 cfg.fit_settings,
                 &truth,
                 chunk,
-                global_window_offset
+                global_window_offset,
+                hold_time_s
             );
 
             for (const auto& p : result.signal_pulses) {
@@ -221,6 +227,14 @@ int main(int argc, char** argv) {
                         << w.expected_count << ","
                         << w.start_time_us << ","
                         << w.end_time_us << ","
+                        << w.fitted_pe_sum << ","
+                        << w.fit_expected_sum << ","
+                        << w.fixed_expected_sum << ","
+                        << w.background_expected_sum << ","
+                        << w.template_mass_in_window << ","
+                        << w.pe_per_observed_count << ","
+                        << w.background_fraction << ","
+                        << w.fit_fraction << ","
                         << chunk
                         << "\n";
 
