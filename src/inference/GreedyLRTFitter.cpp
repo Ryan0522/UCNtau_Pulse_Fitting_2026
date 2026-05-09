@@ -253,16 +253,16 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
                 trial_amplitudes.push_back(best.pulses[j].amplitude_pe);
             }
 
-            trial_amplitudes = likelihood::refit_all_amplitudes(
-                histogram.counts,
-                trial_components,
-                trial_amplitudes,
-                settings.fixed_expected,
-                settings.background_per_bin,
-                settings.min_amplitude_pe,
-                settings.max_amplitude_pe,
-                settings.max_coordinate_descent_steps
-            );
+            // trial_amplitudes = likelihood::refit_all_amplitudes(
+            //     histogram.counts,
+            //     trial_components,
+            //     trial_amplitudes,
+            //     settings.fixed_expected,
+            //     settings.background_per_bin,
+            //     settings.min_amplitude_pe,
+            //     settings.max_amplitude_pe,
+            //     settings.max_coordinate_descent_steps
+            // );
 
             for (std::size_t j = 0; j < trial_pulses.size(); ++j) {
                 trial_pulses[j].amplitude_pe = trial_amplitudes[j];
@@ -455,16 +455,16 @@ FitResult GreedyLRTFitter::fit(
                 trial_components.push_back(component);
                 trial_amplitudes.push_back(amplitude);
 
-                trial_amplitudes = likelihood::refit_all_amplitudes(
-                    histogram.counts,
-                    trial_components,
-                    trial_amplitudes,
-                    settings.fixed_expected,
-                    settings.background_per_bin,
-                    settings.min_amplitude_pe,
-                    settings.max_amplitude_pe,
-                    settings.max_coordinate_descent_steps
-                );
+                // trial_amplitudes = likelihood::refit_all_amplitudes(
+                //     histogram.counts,
+                //     trial_components,
+                //     trial_amplitudes,
+                //     settings.fixed_expected,
+                //     settings.background_per_bin,
+                //     settings.min_amplitude_pe,
+                //     settings.max_amplitude_pe,
+                //     settings.max_coordinate_descent_steps
+                // );
                 
                 const double candidate_refit_amp = trial_amplitudes.back();
                 if (candidate_refit_amp < settings.min_amplitude_pe) {

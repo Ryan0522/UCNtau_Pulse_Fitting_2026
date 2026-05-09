@@ -18,7 +18,7 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "debug_cfwin_emp_10nll_fw500_pad10_150_5PE_bg_nofe_nomulti_noprune_epoch1",
+  "array_output_subdir": "debug_cfwin_emp_10nll_fw500_pad10_500_5PE_bg_nofe_nomulti_noprune_norefit_epoch1",
   "shard_index": 0,
   "num_shards": 1,
 
@@ -41,7 +41,7 @@
     "empirical_pretrigger_us": 10.0,
 
     "native_bin_width_us": 0.5,
-    "support_end_us": 900.0,
+    "support_end_us": 500.0,
     "use_smooth_tail_onset": false,
 
     "baseline": 5.42139594e-05,

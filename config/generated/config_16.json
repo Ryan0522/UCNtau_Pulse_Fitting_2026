@@ -14,7 +14,7 @@
   "tems_tree_name": "tems",
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
-  "array_output_subdir": "debug_cfwin_emp_10nll_gap500_pad10_150_5PE_bg_local_nofe_nomulti_noprune_epoch1",
+  "array_output_subdir": "debug_cfwin_emp_10nll_fw500_pad10_500_5PE_bg_nofe_nomulti_noprune_norefit_epoch1",
   "shard_index": 16,
   "num_shards": 32,
   "debug_max_windows": 50,
@@ -36,7 +36,7 @@
     "empirical_csv_path": "./config/empirical_pulse_template_fast_10pe.csv",
     "empirical_pretrigger_us": 10.0,
     "native_bin_width_us": 0.5,
-    "support_end_us": 900.0,
+    "support_end_us": 500.0,
     "use_smooth_tail_onset": false,
     "baseline": 5.42139594e-05,
     "gauss_amp": 1.52325156,
@@ -54,6 +54,9 @@
     "tau4": 71.6315285
   },
   "region_settings": {
+    "window_mode": "fixed_seed_window",
+    "fixed_seed_pretrigger_us": 10.0,
+    "fixed_seed_window_us": 500.0,
     "coarse_bin_width_us": 0.5,
     "fine_bin_width_us": 0.25,
     "min_gap_us": 500.0,
@@ -99,7 +102,7 @@
     "close_reg_tail_tau_us": 30.0,
     "close_reg_eta": 0.1,
     "close_reg_floor_pe": 1.0,
-    "enable_local_evidence": true,
+    "enable_local_evidence": false,
     "local_evidence_pre_us": 2.0,
     "local_evidence_post_us": 2.0,
     "local_delta_nll_cut": 7.0
