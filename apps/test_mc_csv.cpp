@@ -1,7 +1,9 @@
 #include "ucn/app/WindowedPulseProcessor.hpp"
 #include "ucn/inference/GreedyLRTFitter.hpp"
+#include "ucn/templates/PulseTemplates.hpp"
 #include "ucn/templates/GaussianTripPulseTemplate.hpp"
 #include "ucn/templates/GaussianQuadPulseTemplate.hpp"
+#include "ucn/templates/EmpiricalPulseTemplate.hpp"
 #include "ucn/io/AnalysisConfig.hpp"
 #include "ucn/debug/DebugCsvWriter.hpp"
 
@@ -13,6 +15,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <memory>
 
 std::vector<ucn::Hit> load_mc_hits(const std::string& path) {
     std::vector<ucn::Hit> hits;
@@ -83,24 +86,34 @@ int main(int argc, char** argv) {
     try {
         ucn::io::AnalysisConfig cfg = ucn::io::load_analysis_config(argv[1]);
 
-        ucn::GaussianQuadPulseTemplate pulse_template(
-            cfg.template_config.native_bin_width_us,
-            cfg.template_config.support_end_us,
-            cfg.template_config.use_smooth_tail_onset,
-            cfg.template_config.baseline,
-            cfg.template_config.gauss_amp,
-            cfg.template_config.gauss_mu,
-            cfg.template_config.gauss_sigma,
-            cfg.template_config.tail_start_us,
-            cfg.template_config.tail_width_us,
-            cfg.template_config.a1, cfg.template_config.tau1,
-            cfg.template_config.a2, cfg.template_config.tau2,
-            cfg.template_config.a3, cfg.template_config.tau3,
-            cfg.template_config.a4, cfg.template_config.tau4
-        );
+        std::unique_ptr<ucn::PulseTemplate> pulse_template;
+        if (cfg.template_config.type == "empirical") {
+            pulse_template = std::make_unique<ucn::EmpiricalPulseTemplate>(
+                cfg.template_config.native_bin_width_us,
+                cfg.template_config.support_end_us,
+                cfg.template_config.empirical_csv_path,
+                cfg.template_config.empirical_pretrigger_us
+            );
+        } else {
+            pulse_template = std::make_unique<ucn::GaussianQuadPulseTemplate>(
+                cfg.template_config.native_bin_width_us,
+                cfg.template_config.support_end_us,
+                cfg.template_config.use_smooth_tail_onset,
+                cfg.template_config.baseline,
+                cfg.template_config.gauss_amp,
+                cfg.template_config.gauss_mu,
+                cfg.template_config.gauss_sigma,
+                cfg.template_config.tail_start_us,
+                cfg.template_config.tail_width_us,
+                cfg.template_config.a1, cfg.template_config.tau1,
+                cfg.template_config.a2, cfg.template_config.tau2,
+                cfg.template_config.a3, cfg.template_config.tau3,
+                cfg.template_config.a4, cfg.template_config.tau4
+            );
+        }
 
-        ucn::GreedyLRTFitter fitter(pulse_template);
-        ucn::WindowedPulseProcessor processor(pulse_template, fitter);
+        ucn::GreedyLRTFitter fitter(*pulse_template);
+        ucn::WindowedPulseProcessor processor(*pulse_template, fitter);
 
         std::shared_ptr<ucn::debug::DebugCsvWriter> debug_writer;
 
@@ -115,7 +128,7 @@ int main(int argc, char** argv) {
             debug_writer = std::make_shared<ucn::debug::DebugCsvWriter>(
                 debug_dir,
                 cfg.debug_max_windows,
-                pulse_template
+                *pulse_template
             );
 
             processor.set_debug_writer(debug_writer);
@@ -137,20 +150,21 @@ int main(int argc, char** argv) {
         out << std::fixed << std::setprecision(3);
         win_out << std::fixed << std::setprecision(3);
 
-        out << "window_index,final_nll,seed_count,pulse_count,"
-               "observed_count,expected_count,start_time_us,end_time_us,"
-               "fitted_pe_sum,fit_expected_sum,fixed_expected_sum,"
-               "background_expected_sum,model_expected_sum,"
-               "template_mass_in_window,pe_per_observed_count,"
-               "background_fraction,fit_fraction,"
-               "chunk_index\n";
+        out << "time_us,amplitude_pe,is_pileup,window_index\n";
+
+        win_out << "window_index,final_nll,seed_count,pulse_count,"
+                "observed_count,expected_count,start_time_us,end_time_us,"
+                "fitted_pe_sum,fit_expected_sum,fixed_expected_sum,"
+                "background_expected_sum,template_mass_in_window,"
+                "pe_per_observed_count,background_fraction,fit_fraction,"
+                "chunk_index\n";
 
         // MC signal starts at 10 s.
         const double start_us = 10.0e6;
 
         // Your current long test was effectively 1050 s.
         // For a 1000 s generated MC, set this to 1000.0.
-        const double total_signal_s = 1050.0;
+        const double total_signal_s = 1000.0;
 
         // Safeguard chunk size.
         const double chunk_s = 60.0;
@@ -205,6 +219,8 @@ int main(int argc, char** argv) {
                 global_window_offset,
                 hold_time_s
             );
+
+            
 
             for (const auto& p : result.signal_pulses) {
                 out << p.time_us << ","
