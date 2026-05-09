@@ -140,8 +140,12 @@ void write_summary_header(std::ofstream& out) {
 
 void write_pulse_header(std::ofstream& out) {
     out << "run,segment,hold_time_s,region,time_us,amplitude_pe,"
-           "window_index,width_us,is_pileup,uses_fine_bins,"
-           "background_rate_hz\n";
+           "window_index,width_us,"
+           "fit_topology,seed_count_in_window,fit_pulse_count_in_window,"
+           "pulse_rank_in_window,nearest_fit_dt_us,"
+           "is_multi_seed_window,is_multi_fit_window,"
+           "uses_fine_bins,background_rate_hz,"
+           "legacy_is_pileup\n";
 }
 
 void write_coincidence_header(std::ofstream& out) {
@@ -235,6 +239,9 @@ void append_tagged_pulses(std::ofstream& out,
                           const std::vector<TaggedPulse>& pulses,
                           double background_rate_hz) {
     for (const TaggedPulse& p : pulses) {
+        const int is_multi_seed_window = p.seed_count_in_window > 1 ? 1 : 0;
+        const int is_multi_fit_window = p.fit_pulse_count_in_window > 1 ? 1 : 0;
+
         out << run_id << ','
             << segment << ','
             << std::setprecision(17) << hold_time_s << ','
@@ -243,9 +250,16 @@ void append_tagged_pulses(std::ofstream& out,
             << p.amplitude_pe << ','
             << p.window_index << ','
             << p.width_us << ','
-            << (p.is_pileup ? 1 : 0) << ','
+            << p.fit_topology << ','
+            << p.seed_count_in_window << ','
+            << p.fit_pulse_count_in_window << ','
+            << p.pulse_rank_in_window << ','
+            << p.nearest_fit_dt_us << ','
+            << is_multi_seed_window << ','
+            << is_multi_fit_window << ','
             << (p.uses_fine_bins ? 1 : 0) << ','
-            << background_rate_hz << '\n';
+            << background_rate_hz << ','
+            << (p.is_pileup ? 1 : 0) << '\n';
     }
 }
 

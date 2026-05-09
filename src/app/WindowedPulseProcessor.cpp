@@ -81,6 +81,57 @@ debug::DebugCaseType classify_observed_debug_case(
     return debug::DebugCaseType::Unknown;
 }
 
+std::string calssify_seed_fit_topology(int n_seeds, int n_fit_pulses) {
+    if (n_seeds == 1 && n_fit_pulses == 1) {
+        return "single_seed_single_fit";
+    }
+    if (n_seeds == 1 && n_fit_pulses > 1) {
+        return "single_seed_multi_fit";
+    }
+    if (n_seeds > 1 && n_fit_pulses == 1) {
+        return "multi_seed_single_fit";
+    }
+    if (n_seeds > 1 && n_fit_pulses > 1) {
+        return "multi_seed_multi_fit";
+    }
+    return "unknown";
+}
+
+int pulse_rank_by_time(const std::vector<PulseCandidate>& pulses, std::size_t idx) {
+    if (idx >= pulses.size()) return -1;
+
+    int rank = 0;
+    const double t = pulses[idx].time_us;
+
+    for (std::size_t j = 0; j < pulses.size(); ++j) {
+        if (j == idx) continue;
+        if (pulses[j].time_us < t) {
+            ++rank;
+        }
+    }
+
+    return rank;
+}
+
+double nearest_fit_neighbor_dt_us(const std::vector<PulseCandidate>& pulses, std::size_t idx) {
+    if (idx >= pulses.size() || pulses.size() < 2) {
+        return -1.0;
+    }
+
+    double best = std::numeric_limits<double>::infinity();
+    const double t = pulses[idx].time_us;
+
+    for (std::size_t j = 0; j < pulses.size(); ++j) {
+        if (j == idx) continue;
+        const double dt = std::abs(pulses[j].time_us - t);
+        if (dt < best) {
+            best = dt;
+        }
+    }
+
+    return std::isfinite(best) ? best : -1.0;
+}
+
 } // namespace
 
 WindowedPulseProcessor::WindowedPulseProcessor(const PulseTemplate& pulse_template,
@@ -577,14 +628,34 @@ void WindowedPulseProcessor::fit_stream(
         }
         carry_pulses.swap(updated_carry);
 
-        for (const PulseCandidate& pulse : fit.pulses) {
+        const int seed_count_in_window = static_cast<int>(seeds.size());
+        const int fit_pulse_count_in_window = static_cast<int>(fit.pulses.size());
+
+        const std::string fit_topology = classify_seed_fit_topology(
+            seed_count_in_window,
+            fit_pulse_count_in_window
+        );
+
+        for (std::size_t ip = 0; ip < fit.pulses.size(); ++ip) {
+            const PulseCandidate& pulse = fit.pulses[ip];
+
             TaggedPulse tagged;
             tagged.time_us = pulse.time_us;
             tagged.amplitude_pe = pulse.amplitude_pe;
             tagged.window_index = window_index;
             tagged.width_us = end_time_us - start_time_us;
-            tagged.is_pileup = fit.pulses.size() > 1;
+
+            // Deprecated compatibility flag.
+            // Do not use this as physical pileup.
+            tagged.is_pileup = fit_pulse_count_in_window > 1;
             tagged.uses_fine_bins = uses_fine_bins;
+
+            tagged.seed_count_in_window = seed_count_in_window;
+            tagged.fit_pulse_count_in_window = fit_pulse_count_in_window;
+            tagged.pulse_rank_in_window = pulse_rank_by_time(fit.pulses, ip);
+            tagged.nearest_fit_dt_us = nearest_fit_neighbor_dt_us(fit.pulses, ip);
+            tagged.fit_topology = fit_topology;
+
             output_pulses.push_back(tagged);
             carry_pulses.push_back(pulse);
         }

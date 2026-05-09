@@ -44,6 +44,12 @@ struct TaggedPulse {
 
     bool is_pileup = false;
     bool uses_fine_bins = false;
+
+    int seed_count_in_window = 0;
+    int fit_pulse_count_in_window = 0;
+    int pulse_rank_in_window = -1;
+    double nearest_fit_dt_us = -1.0;
+    std::string fit_topology = "unknown";
 };
 
 struct RegionSettings {
