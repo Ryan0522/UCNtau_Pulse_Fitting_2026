@@ -266,8 +266,8 @@ def generate_empirical_mc_dataset(
         "rate_period_s": rate_period_s,
     })
 
-    truth_path = f"mc_truth_{suffix}.csv"
-    hits_path = f"mc_hits_{suffix}.csv"
+    truth_path = f"./test/mc_truth_{suffix}.csv"
+    hits_path = f"./test/mc_hits_{suffix}.csv"
 
     truth_df.to_csv(truth_path, index=False)
 
@@ -430,18 +430,26 @@ def save_truth_dt_summary(truth_df, suffix):
 # ============================================================
 
 if __name__ == "__main__":
-    hits_df, truth_df = generate_empirical_mc_dataset_1000s(
-        rate_csv="rate.csv",
-        amplitude_csv="amplitude_pe.csv",
-        pmf_csv="Fine_PE_Group_PMF.csv",
-        suffix="empirical_seg12_pmf40_50_1000s",
+    suffix = "closure_lowrate_nobkg"
+
+    hits_df, truth_df = generate_empirical_mc_dataset(
+        rate_csv="./test/input/rate.csv",
+        amplitude_csv="./test/input/amplitude_pe.csv",
+        pmf_csv="./test/input/Fine_PE_Group_PMF.csv",
+        suffix=suffix,
         segment=12,
         pe_group="40-50",
         region="signal",
-        seed=42,
+        pre_trigger_s=10.0,
+        support_end_us=500.0,
+        duration_s=60.0,
+        bkg_rate_hz_per_channel=100.0,
+        rate_scale=0.05,
+        deformation_k=1.0,
+        coincidence_window_us=0.05,
+        timing_shift_us=0.0,
+        repeat_rate_curve=True,
+        rng=np.random.default_rng(1),
     )
 
-    save_truth_dt_summary(
-        truth_df,
-        suffix="empirical_seg12_pmf40_50_1000s",
-    )
+    save_truth_dt_summary(truth_df, suffix)
