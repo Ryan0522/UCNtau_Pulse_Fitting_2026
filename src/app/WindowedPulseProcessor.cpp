@@ -81,7 +81,7 @@ debug::DebugCaseType classify_observed_debug_case(
     return debug::DebugCaseType::Unknown;
 }
 
-std::string calssify_seed_fit_topology(int n_seeds, int n_fit_pulses) {
+std::string classify_seed_fit_topology(int n_seeds, int n_fit_pulses) {
     if (n_seeds == 1 && n_fit_pulses == 1) {
         return "single_seed_single_fit";
     }
