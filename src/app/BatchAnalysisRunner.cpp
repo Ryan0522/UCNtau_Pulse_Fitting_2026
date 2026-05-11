@@ -102,7 +102,7 @@ std::string make_array_subdir_name(const io::AnalysisConfig& cfg_) {
     }
 
     const double pe = cfg_.fit_settings.min_amplitude_pe;
-    const double nll = cfg_.fit_settings.delta_nll_cut;
+    const double nll = cfg_.fit_settings.discovery_delta_nll_cut;
     const double wt = cfg_.region_settings.min_gap_us;
     const double wc = cfg_.region_settings.coincidence_window_us;
 

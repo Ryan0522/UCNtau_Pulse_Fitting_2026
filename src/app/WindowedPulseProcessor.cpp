@@ -490,10 +490,6 @@ void WindowedPulseProcessor::fit_stream(
         window_fit_settings.background_per_bin = background_rate_hz * bin_width_us * 1.0e-6;
         window_fit_settings.fixed_expected = fixed_expected;
 
-        // Hard-coded 
-        window_fit_settings.use_cluster_local_amplitude_fit = true;
-        window_fit_settings.enable_final_simultaneous_refit = false;
-
         FitResult fit = fitter_.fit(
             histogram, seeds, window_fit_settings, sink_for_fit, prefit_case_id
         );
