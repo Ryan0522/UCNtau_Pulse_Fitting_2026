@@ -22,43 +22,33 @@ struct ClusterBound {
 };
 
 struct FitSettings {
+    // Scan / discovery
     double scan_step_us = 0.5;
     double max_offset_us = 5.0;
-    double delta_nll_cut = 10.0;
-    double min_spacing_us = 2.0;
-    double min_amplitude_pe = 5.0;
-    double max_amplitude_pe = 300.0;
-    double background_per_bin = 0.0;
     double cluster_gap_us = 1.0;
-    int max_coordinate_descent_steps = 20;
-    bool enable_back_pruning = true;
-    bool allow_multiple_fits_per_cluster = true;
+    double min_spacing_us = 2.0;
+    bool allow_multiple_fits_per_cluster = false;
 
-    // Experimental: one local amplitude fit per seed cluster.
-    // Uses only the cluster-local histogram partition, then rescales by
-    // actual template mass inside that local partition
-    bool use_cluster_local_amplitude_fit = false;
-    double local_template_mass_floor = 1.0e-6;    
-    bool enable_final_simultaneous_refit = false;
+    // LRT acceptance
+    double discovery_delta_nll_cut = 10.0;
 
-    // Method 1: close-pulse residual regularization.
-    // Penalty = lambda * exp(-dt / close_tau) * exp(-A_new / residual_scale),
-    // residual_scale = eta * A_prev * exp(-dt / tail_tau) + floor_pe.
-    bool enable_close_pulse_regularization = false;
-    double close_reg_lambda_nll = 0.0;
-    double close_reg_window_us = 100.0;
-    double close_reg_close_tau_us = 10.0;
-    double close_reg_tail_tau_us = 30.0;
-    double close_reg_eta = 0.10;
-    double close_reg_floor_pe = 1.0;
+    // Amplitude bounds
+    double min_amplitude_pe = 5.0;
+    double max_amplitude_pe = 400.0;
 
-    // Method 2: local evidence requirement.
-    // The local NLL improvement around the candidate time must exceed local_delta_nll_cut.
-    bool enable_local_evidence = false;
-    double local_evidence_pre_us = 0.5;
-    double local_evidence_post_us = 2.0;
-    double local_delta_nll_cut = 3.0;
+    // Sequential local discovery
+    double local_template_mass_floor = 1.0e-3;
 
+    // Final simultaneous refit at fixed discovered times.
+    int max_refit_steps = 50;
+    double refit_tolerance = 1.0e-8;
+
+    // Pruning after refit
+    double prune_delta_nll_cut = 3.0;
+    int max_prune_passes = 3;
+
+    // External expected counts
+    double background_per_bin = 0.0;
     std::vector<double> fixed_expected;
 };
 

@@ -33,19 +33,30 @@ private:
         const FitSettings& settings
     ) const;
 
-    FitResult remove_weak_pulses(
-        const Histogram& histogram,
-        const FitResult& current,
-        const std::vector<std::vector<double>>& components,
-        const FitSettings& settings
-    ) const;
-
-    FitResult fit_cluster_local_sequential(
+    FitResult discover_local_sequential(
         const Histogram& histogram,
         const std::vector<ClusterBound>& bounds,
         const FitSettings& settings,
         ucn::debug::DebugSink* debug_sink,
         const std::string& debug_case_id
+    ) const;
+
+    FitResult refit_amplitudes(
+        const Histogram& histogram,
+        const FitResult& input,
+        const FitSettings& settings
+    ) const;
+
+    FitResult prune_by_deletion_lrt(
+        const Histogram& histogram,
+        const FitResult& input,
+        const FitSettings& settings
+    ) const;
+
+    FitResult finalize_result(
+        const Histogram& histogram,
+        const FitResult& discovered,
+        const FitSettings& settings
     ) const;
 
     const PulseTemplate& pulse_template_;
