@@ -25,8 +25,12 @@ def load_pe_group_pmf(
     return pmf, cdf, bin_width_us
 
 def load_empirical_pe_sampler(amplitude_csv, pe_min=2, pe_max=None):
-    df = pd.read_csv(amplitude_csv).copy()
-    df["count"] = pd.to_numeric(df["count"], errors="coerce").fillna(0.0)
+    df0 = pd.read_csv(amplitude_csv).copy()
+
+    for c in ["count", "bin_left", "bin_right"]:
+        df0[c] = pd.to_numeric(df0[c], errors="coerce")
+
+    df = df0.dropna(subset=["count", "bin_left", "bin_right"]).copy()
     df = df[df["count"] > 0].copy()
 
     if pe_min is not None:
@@ -34,18 +38,32 @@ def load_empirical_pe_sampler(amplitude_csv, pe_min=2, pe_max=None):
     if pe_max is not None:
         df = df[df["bin_left"] < pe_max].copy()
 
+    if df.empty:
+        lo = df0["bin_left"].min()
+        hi = df0["bin_right"].max()
+        raise ValueError(
+            f"No PE histogram bins survive pe_min={pe_min}, pe_max={pe_max}. "
+            f"Available histogram range appears to be [{lo}, {hi}]. "
+            "For fixed PE, use fixed_amplitude_pe=..., not a narrow pe_min/pe_max window."
+        )
+
     weights = df["count"].to_numpy(float)
-    weights /= weights.sum()
+    weights_sum = weights.sum()
+    if weights_sum <= 0 or not np.isfinite(weights_sum):
+        raise ValueError("PE histogram weights are invalid after filtering.")
+
+    weights /= weights_sum
 
     bin_left = df["bin_left"].to_numpy(float)
     bin_right = df["bin_right"].to_numpy(float)
 
     def sample_pe(rng, n):
-        idx = rng.choice(len(df), size=n, replace=True, p=weights)
+        if n <= 0:
+            return np.asarray([], dtype=int)
 
+        idx = rng.choice(len(df), size=n, replace=True, p=weights)
         vals = rng.uniform(bin_left[idx], bin_right[idx])
         vals = np.rint(vals).astype(int)
-
         vals = np.maximum(vals, 2)
         return vals
 
@@ -155,6 +173,40 @@ def sample_poisson_arrivals_us(rng, rate_hz, start_us, end_us):
         arrivals.append(t)
 
     return np.asarray(arrivals)
+
+def sample_piecewise_rate_arrivals_us(
+    rng, rate_schedule_hz,
+    signal_start_us=10.0e6, block_duration_s=60.0,
+):
+    all_times = []
+    rows = []
+
+    for block_id, rate_hz in enumerate(rate_schedule_hz):
+        rate_hz = float(rate_hz)
+        block_start_s = block_id * block_duration_s
+        block_end_s = (block_id + 1) * block_duration_s
+
+        lam = max(rate_hz, 0.0) * block_duration_s
+        n = rng.poisson(lam)
+
+        if n > 0:
+            t_rel_s = rng.uniform(block_start_s, block_end_s, size=n)
+            all_times.extend(signal_start_us + 1.0e6 * t_rel_s)
+
+        rows.append({
+            "block_id": block_id,
+            "block_start_s": block_start_s,
+            "block_end_s": block_end_s,
+            "rate_hz": rate_hz,
+            "expected_events": lam,
+            "generated_events": n,
+        })
+
+    times = np.asarray(all_times, dtype=float)
+    times = times[np.isfinite(times)]
+    times.sort()
+    schedule_df = pd.DataFrame(rows)
+    return times, schedule_df
 
 def generate_pulse_hits_guaranteed_coincidence(
     rng,
@@ -342,56 +394,161 @@ def generate_empirical_mc_dataset(
     return hits_df, truth_df
 
 
-def generate_empirical_mc_dataset_1000s(
-    rate_csv="rate.csv",
-    amplitude_csv="amplitude_pe.csv",
-    pmf_csv="Fine_PE_Group_PMF.csv",
-    suffix="empirical_seg12_pmf40_50_1000s",
-    segment=12,
-    pe_group="40-50",
-    region="signal",
-    seed=42,
+def generate_frequency_sweep_dataset(
+    amplitude_csv, pmf_csv, suffix, segment=12, pe_group="40-50", region="signal",
+    seed=1, output_dir="test/", pre_trigger_s=10.0, support_end_us=500.0,
+    block_duration_s=60.0, rate_schedule_hz=(100, 200, 400, 800, 1600, 800, 400, 200, 100),
+    bkg_rate_hz_per_channel=0.0, pe_min=5, pe_max=200,
+    amplitude_scale=1.0, amplitude_shift_pe=0.0, amplitude_max_pe=400,
+    fixed_amplitude_pe=None,
+    deformation_k=1.0,
+    coincidence_window_us=0.05, timing_shift_us=0.0, template_reference_offset_us=20.0,
 ):
-    """
-    The first clean test.
-
-    Generate a 1000 s MC stream by repeating the empirical 60 s rate curve.
-
-    Fixed settings:
-        empirical rate.csv, repeated
-        empirical amplitude_pe.csv
-        fixed 40-50 PE PMF
-        forced coincidence
-        no timing shift
-        no deformation
-        background = 1000 Hz/channel
-
-    First inspect:
-        mc_truth_empirical_seg12_pmf40_50_1000s.csv
-
-    Then run C++ only if the truth-level dt distribution is worth testing.
-    """
     rng = np.random.default_rng(seed)
 
-    return generate_empirical_mc_dataset(
-        rate_csv=rate_csv,
-        amplitude_csv=amplitude_csv,
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    rate_schedule_hz = np.asarray(rate_schedule_hz, dtype=float)
+    n_blocks = len(rate_schedule_hz)
+    duration_s = n_blocks * block_duration_s
+
+    signal_start_us = pre_trigger_s * 1.0e6
+    signal_end_us = signal_start_us + duration_s * 1.0e6
+    total_record_end_us = signal_end_us + support_end_us
+
+    pmf, cdf, template_bin_width_us = load_pe_group_pmf(
         pmf_csv=pmf_csv,
-        suffix=suffix,
         segment=segment,
-        pe_group=pe_group,
         region=region,
-        pre_trigger_s=10.0,
-        support_end_us=500.0,
-        duration_s=1000.0,
-        bkg_rate_hz_per_channel=1000.0,
-        rate_scale=1.0,
-        deformation_k=1.0,
-        coincidence_window_us=0.05,
-        timing_shift_us=0.0,
-        repeat_rate_curve=True,
-        rng=rng,
+        pe_group=pe_group,
+        support_end_us=support_end_us,
     )
+    
+    true_times_us, schedule_df = sample_piecewise_rate_arrivals_us(
+        rng=rng,
+        rate_schedule_hz=rate_schedule_hz,
+        signal_start_us=signal_start_us,
+        block_duration_s=block_duration_s,
+    )
+
+    n_pulses = len(true_times_us)
+
+    if fixed_amplitude_pe is not None:
+        raw_amplitudes = np.full(n_pulses, int(fixed_amplitude_pe), dtype=int)
+        true_amplitudes = raw_amplitudes.copy()
+    else:
+        sample_pe = load_empirical_pe_sampler(
+            amplitude_csv=amplitude_csv,
+            pe_min=pe_min,
+            pe_max=pe_max,
+        )
+
+        raw_amplitudes = sample_pe(rng, n_pulses)
+
+        true_amplitudes = np.rint(
+            raw_amplitudes * amplitude_scale + amplitude_shift_pe
+        ).astype(int)
+
+        true_amplitudes = np.clip(true_amplitudes, 2, amplitude_max_pe)
+
+    block_id = np.floor(
+        ((true_times_us - signal_start_us) * 1.0e-6) / block_duration_s
+    ).astype(int)
+    block_id = np.clip(block_id, 0, n_blocks - 1)
+
+    template_start_times_us = true_times_us - template_reference_offset_us
+
+    truth_df = pd.DataFrame({
+        "time_us": true_times_us,
+        "template_start_us": template_start_times_us,
+        "template_reference_offset_us": template_reference_offset_us,
+        "time_rel_s": (true_times_us - signal_start_us) * 1.0e-6,
+
+        "block_id": block_id,
+        "block_start_s": block_id * block_duration_s,
+        "block_end_s": (block_id + 1) * block_duration_s,
+        "rate_hz": rate_schedule_hz[block_id],
+
+        "amplitude_pe": true_amplitudes,
+        "raw_amplitude_pe": raw_amplitudes,
+        "amplitude_scale": amplitude_scale,
+        "amplitude_shift_pe": amplitude_shift_pe,
+        "amplitude_max_pe": amplitude_max_pe,
+        "fixed_amplitude_pe": fixed_amplitude_pe if fixed_amplitude_pe is not None else np.nan,
+        "pe_min": pe_min,
+        "pe_max": pe_max,
+
+        "segment": segment,
+        "pe_group_for_pmf": pe_group,
+        "duration_s": duration_s,
+        "bkg_rate_hz_per_channel": bkg_rate_hz_per_channel,
+    })
+
+    all_times = []
+    all_channels = []
+    all_types = []
+
+    for template_start_us, amp in zip(template_start_times_us, true_amplitudes):
+        abs_t, ch = generate_pulse_hits_guaranteed_coincidence(
+            rng=rng,
+            t0_us=template_start_us,
+            amp=int(amp),
+            cdf=cdf,
+            template_bin_width_us=template_bin_width_us,
+            coincidence_window_us=coincidence_window_us,
+            deformation_k=deformation_k,
+        )
+
+        abs_t = abs_t + timing_shift_us
+
+        mask = (abs_t >= 0.0) & (abs_t < total_record_end_us)
+        if np.any(mask):
+            all_times.extend(abs_t[mask])
+            all_channels.extend(ch[mask])
+            all_types.extend(["signal"] * int(mask.sum()))
+
+    # Constant background only. Set to 0 for the cleanest test.
+    if bkg_rate_hz_per_channel > 0:
+        for ch_id in [1, 2]:
+            bkg_times = sample_poisson_arrivals_us(
+                rng=rng,
+                rate_hz=bkg_rate_hz_per_channel,
+                start_us=0.0,
+                end_us=total_record_end_us,
+            )
+            all_times.extend(bkg_times)
+            all_channels.extend([ch_id] * len(bkg_times))
+            all_types.extend(["noise"] * len(bkg_times))
+
+    hits_df = pd.DataFrame({
+        "time_us": np.asarray(all_times, dtype=float),
+        "channel": np.asarray(all_channels, dtype=int),
+        "type": np.asarray(all_types),
+    }).sort_values("time_us", kind="mergesort")
+
+    truth_path = output_dir / f"mc_truth_{suffix}.csv"
+    hits_path = output_dir / f"mc_hits_{suffix}.csv"
+    hits_labeled_path = output_dir / f"mc_hits_labeled_{suffix}.csv"
+    schedule_path = output_dir / f"mc_schedule_{suffix}.csv"
+
+    truth_df.to_csv(truth_path, index=False)
+    hits_df[["time_us", "channel"]].to_csv(hits_path, index=False)
+    hits_df.to_csv(hits_labeled_path, index=False)
+    schedule_df.to_csv(schedule_path, index=False)
+
+    print(f"[write] {truth_path}")
+    print(f"[write] {hits_path}")
+    print(f"[write] {hits_labeled_path}")
+    print(f"[write] {schedule_path}")
+    print(f"[info] suffix={suffix}")
+    print(f"[info] duration_s={duration_s}")
+    print(f"[info] n_truth={len(truth_df)}, n_hits={len(hits_df)}")
+    print(f"[info] rate_schedule_hz={rate_schedule_hz}")
+    print(f"[info] PE sampled from {amplitude_csv}")
+    print(f"[info] bkg_rate_hz_per_channel={bkg_rate_hz_per_channel}")
+
+    return hits_df, truth_df, schedule_df
 
 
 # ============================================================
@@ -475,4 +632,71 @@ if __name__ == "__main__":
         amplitude_max_pe=400.0,
     )
 
+    save_truth_dt_summary(truth_df, suffix, output_dir=Path("test/"))
+
+    
+    suffix = "freq_sweep_fixedPE40_nobkg"
+    hits_df, truth_df, schedule_df = generate_frequency_sweep_dataset(
+        amplitude_csv="./test/input/amplitude_pe.csv",
+        pmf_csv="./test/input/Fine_PE_Group_PMF.csv",
+        suffix=suffix,
+        segment=12,
+        pe_group="40-50",
+        region="signal",
+        seed=1,
+        output_dir=Path("test/"),
+
+        block_duration_s=5.0,
+        rate_schedule_hz=[100, 200, 400, 800, 1600, 800, 400, 200, 100],
+
+        # no background first
+        bkg_rate_hz_per_channel=0.0,
+
+        # fixed PE mode
+        fixed_amplitude_pe=40,
+
+        # ignored in fixed mode, but keep harmless values
+        pe_min=5,
+        pe_max=400,
+        amplitude_scale=1.0,
+        amplitude_shift_pe=0.0,
+        amplitude_max_pe=400,
+
+        deformation_k=1.0,
+        coincidence_window_us=0.05,
+        timing_shift_us=0.0,
+        template_reference_offset_us=20.0,
+    )
+    save_truth_dt_summary(truth_df, suffix, output_dir=Path("test/"))
+
+    suffix = "freq_sweep_empPE_nobkg"
+    hits_df, truth_df, schedule_df = generate_frequency_sweep_dataset(
+        amplitude_csv="./test/input/amplitude_pe.csv",
+        pmf_csv="./test/input/Fine_PE_Group_PMF.csv",
+        suffix=suffix,
+        segment=12,
+        pe_group="40-50",
+        region="signal",
+        seed=1,
+        output_dir=Path("test/"),
+
+        block_duration_s=5.0,
+        rate_schedule_hz=[100, 200, 400, 800, 1600, 800, 400, 200, 100],
+
+        # no background first
+        bkg_rate_hz_per_channel=0.0,
+
+        # same PE histogram distribution for all blocks
+        fixed_amplitude_pe=None,
+        pe_min=5,
+        pe_max=400,
+        amplitude_scale=1.0,
+        amplitude_shift_pe=0.0,
+        amplitude_max_pe=400,
+
+        deformation_k=1.0,
+        coincidence_window_us=0.05,
+        timing_shift_us=0.0,
+        template_reference_offset_us=20.0,
+    )
     save_truth_dt_summary(truth_df, suffix, output_dir=Path("test/"))
