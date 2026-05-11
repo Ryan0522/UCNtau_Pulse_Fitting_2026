@@ -288,9 +288,14 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<bool>(f, "enable_back_pruning", cfg.fit_settings.enable_back_pruning);
         cfg.fit_settings.allow_multiple_fits_per_cluster = 
             get_or<bool>(f, "allow_multiple_fits_per_cluster", cfg.fit_settings.allow_multiple_fits_per_cluster);
+        cfg.fit_settings.use_cluster_local_amplitude_fit =
+            get_or<bool>(f, "use_cluster_local_amplitude_fit", cfg.fit_settings.use_cluster_local_amplitude_fit);
+        cfg.fit_settings.local_template_mass_floor =
+            get_or<double>(f, "local_template_mass_floor", cfg.fit_settings.local_template_mass_floor);
+        cfg.fit_settings.enable_final_simultaneous_refit =
+            get_or<bool>(f, "enable_final_simultaneous_refit", cfg.fit_settings.enable_final_simultaneous_refit);
         cfg.fit_settings.enable_close_pulse_regularization =
-            get_or<bool>(f, "enable_close_pulse_regularization",
-                         cfg.fit_settings.enable_close_pulse_regularization);
+            get_or<bool>(f, "enable_close_pulse_regularization", cfg.fit_settings.enable_close_pulse_regularization);
         cfg.fit_settings.close_reg_lambda_nll =
             get_or<double>(f, "close_reg_lambda_nll", cfg.fit_settings.close_reg_lambda_nll);
         cfg.fit_settings.close_reg_window_us =

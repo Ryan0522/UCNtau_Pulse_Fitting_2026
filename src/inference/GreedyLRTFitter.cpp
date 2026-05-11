@@ -203,19 +203,20 @@ BinRange local_partition_for_cluster(
 double poisson_nll_range(
     const Histogram& histogram,
     const std::vector<double>& expected,
-    const FitSettings& settings,
+    const std::vector<double>& fixed_expected,
+    double background_per_bin,
     BinRange range
 ) {
     range.last = std::min(range.last, histogram.counts.size());
 
     double nll = 0.0;
     for (std::size_t i = range.first; i < range.last; ++i) {
-        const double fixed = settings.fixed_expected.empty() ? 0.0 : settings.fixed_expected[i];
+        const double fixed = fixed_expected.empty() ? 0.0 : fixed_expected[i];
         nll += poisson_nll_bin(
             histogram.counts[i],
             expected[i],
             fixed,
-            settings.background_per_bin
+            background_per_bin
         );
     }
     return nll;
@@ -237,7 +238,10 @@ double optimizer_cluster_local_full_amplitude(
     const Histogram& histogram,
     const std::vector<double>& base_expected,
     const std::vector<double>& component,
-    const FitSettings& settings,
+    const std::vector<double>& fixed_expected,
+    double background_per_bin,
+    double max_amplitude_pe,
+    double local_template_mass_floor,
     BinRange range,
     double& local_mass_out
 ) {
@@ -247,21 +251,21 @@ double optimizer_cluster_local_full_amplitude(
     for (std::size_t i = range.first; i < range.last; ++i) {
         local_mass_out += component[i];
     }
-    if (!(local_mass_out > settings.local_template_mass_floor) ||
+    if (!(local_mass_out > local_template_mass_floor) ||
         !std::isfinite(local_mass_out)) {
         return std::numeric_limits<double>::quiet_NaN();
     }
 
-    const double local_upper = std::max(0.0, settings.max_amplitude_pe * local_mass_out);
+    const double local_upper = std::max(0.0, max_amplitude_pe * local_mass_out);
 
     double local_amp = 0.0;
     for (std::size_t i = range.first; i < range.last; ++i) {
-        const double fixed = settings.fixed_expected.empty() ? 0.0 : settings.fixed_expected[i];
+        const double fixed = fixed_expected.empty() ? 0.0 : fixed_expected[i];
         const double residual = 
             histogram.counts[i]
             - base_expected[i]
             - fixed
-            - settings.background_per_bin;
+            - background_per_bin;
 
         if (residual > 0.0) {
             local_amp += residual;
@@ -274,10 +278,10 @@ double optimizer_cluster_local_full_amplitude(
         for (std::size_t i = range.first; i < range.last; ++i) {
             const double s_local = component[i] / local_mass_out;
             double mu = base_expected[i] + local_amp * s_local;
-            if (!settings.fixed_expected.empty()) {
-                mu += std::max(0.0, settings.fixed_expected[i]);
+            if (!fixed_expected.empty()) {
+                mu += std::max(0.0, fixed_expected[i]);
             }
-            mu += std::max(0.0, settings.background_per_bin);
+            mu += std::max(0.0, background_per_bin);
             mu = std::max(mu, 1.0e-12);
 
             grad += s_local * (1.0 - histogram.counts[i] / mu);
@@ -486,6 +490,13 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
 ) const {
     FitResult result;
     result.expected_total.assign(histogram.counts.size(), 0.0);
+
+    std::vector<double> running_fixed_expected = settings.fixed_expected;
+    if (running_fixed_expected.empty()) {
+        running_fixed_expected.assign(histogram.counts.size(), 0.0);
+    }
+    const std::vector<double> zero_base(histogram.counts.size(), 0.0);
+
     result.final_nll = likelihood::poisson_nll(
         histogram.counts,
         result.expected_total,
@@ -514,6 +525,7 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
          ucn::debug::LRTTrialDebug row;
         row.case_id = debug_case_id;
         row.status = status;
+        row.fit_iter = cluster_index + 1;
         row.cluster_index = cluster_index;
         row.trial_time_us = trial_time_us;
         row.trial_amp = trial_amp;
@@ -522,6 +534,8 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
         row.delta_nll = delta_nll;
         row.penalty_nll = penalty_nll;
         row.required_delta_nll = required_delta_nll;
+        row.local_delta_nll = delta_nll;
+        row.local_pass = margin >= 0.0 ? 1 : 0;
         row.margin = margin;
         row.accepted = accepted;
 
@@ -546,7 +560,7 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
         }
 
         const double old_local_nll = poisson_nll_range(
-            histogram, result.expected_total, settings, local_range
+            histogram, zero_base, running_fixed_expected, settings.background_per_bin, local_range
         );
 
         double best_margin = -std::numeric_limits<double>::infinity();
@@ -556,7 +570,7 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
         double best_time = 0.0;
         double best_amplitude = 0.0;
         std::vector<double> best_component;
-        std::vector<double> best_expected;
+        std::vector<double> best_trial_expected;
 
         for (double time_us = bound.left_us;
              time_us <= bound.right_us + 0.5 * settings.scan_step_us;
@@ -573,8 +587,9 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
             std::vector<double> component = pulse_template_.shifted_to_histogram(time_us, histogram.bin_edges_us);
             double local_mass = 0.0;
             const double amplitude = optimizer_cluster_local_full_amplitude(
-                histogram, result.expected_total, component,
-                settings, local_range, local_mass
+                histogram, zero_base, component, running_fixed_expected,
+                settings.background_per_bin, settings.max_amplitude_pe, settings.local_template_mass_floor,
+                local_range, local_mass
             );
 
             if (!std::isfinite(amplitude)) {
@@ -594,9 +609,9 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
                 continue;
             }
 
-            std::vector<double> trial_expected = add_scaled_component(result.expected_total, component, amplitude);
+            std::vector<double> trial_expected = add_scaled_component(zero_base, component, amplitude);
             const double trial_local_nll = poisson_nll_range(
-                histogram, trial_expected, settings, local_range
+                histogram, trial_expected, running_fixed_expected, settings.background_per_bin, local_range
             );
 
             const double local_delta = old_local_nll - trial_local_nll;
@@ -625,7 +640,7 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
                 best_time = time_us;
                 best_amplitude = amplitude;
                 best_component = std::move(component);
-                best_expected = std::move(trial_expected);
+                best_trial_expected = std::move(trial_expected);
             }
         }
 
@@ -646,7 +661,11 @@ FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
 
         result.pulses.push_back(PulseCandidate{best_time, best_amplitude});
         components.push_back(std::move(best_component));
-        result.expected_total = std::move(best_expected);
+
+        for (std::size_t i = 0; i < histogram.counts.size(); ++i) {
+            result.expected_total[i] += best_trial_expected[i];
+            running_fixed_expected[i] += best_trial_expected[i];
+        }
 
         result.final_nll = likelihood::poisson_nll(
             histogram.counts, result.expected_total, settings.fixed_expected, settings.background_per_bin
