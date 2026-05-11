@@ -99,28 +99,21 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "delta_nll_cut": 10.0,
-    "min_spacing_us": 1.0,
-    "min_amplitude_pe": 5.0,
-    "max_amplitude_pe": 400.0,
-    "background_per_bin": 0.0,
     "cluster_gap_us": 1.0,
-    "max_coordinate_descent_steps": 20,
-    "enable_back_pruning": false,
+    "min_spacing_us": 2.0,
     "allow_multiple_fits_per_cluster": false,
 
-    "enable_close_pulse_regularization": false,
-    "close_reg_lambda_nll": 100.0,
-    "close_reg_window_us": 100.0,
-    "close_reg_close_tau_us": 10.0,
-    "close_reg_tail_tau_us": 30.0,
-    "close_reg_eta": 0.10,
-    "close_reg_floor_pe": 1.0,
+    "discovery_delta_nll_cut": 10.0,
+    "local_template_mass_floor": 0.001,
 
-    "enable_local_evidence": false,
-    "local_evidence_pre_us": 2.0,
-    "local_evidence_post_us": 2.0,
-    "local_delta_nll_cut": 7.0
+    "min_amplitude_pe": 5.0,
+    "max_amplitude_pe": 400.0,
+
+    "max_refit_steps": 50,
+    "refit_tolerance": 1e-8,
+
+    "prune_delta_nll_cut": 3.0,
+    "max_prune_passes": 3
   },
 
   "coincidence_settings": {

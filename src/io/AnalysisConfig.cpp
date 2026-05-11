@@ -11,6 +11,45 @@ namespace ucn::io {
 
 namespace {
 
+void validate_fit_settings(const FitSettings& s) {
+    if (s.scan_step_us <= 0.0) {
+        throw std::runtime_error("fit_settings.scan_step_us must be positive.");
+    }
+    if (s.max_offset_us < 0.0) {
+        throw std::runtime_error("fit_settings.max_offset_us must be nonnegative.");
+    }
+    if (s.cluster_gap_us < 0.0) {
+        throw std::runtime_error("fit_settings.cluster_gap_us must be nonnegative.");
+    }
+    if (s.min_spacing_us < 0.0) {
+        throw std::runtime_error("fit_settings.min_spacing_us must be nonnegative.");
+    }
+    if (s.discovery_delta_nll_cut < 0.0) {
+        throw std::runtime_error("fit_settings.discovery_delta_nll_cut must be nonnegative.");
+    }
+    if (s.local_template_mass_floor <= 0.0) {
+        throw std::runtime_error("fit_settings.local_template_mass_floor must be positive.");
+    }
+    if (s.min_amplitude_pe < 0.0) {
+        throw std::runtime_error("fit_settings.min_amplitude_pe must be nonnegative.");
+    }
+    if (s.max_amplitude_pe <= s.min_amplitude_pe) {
+        throw std::runtime_error("fit_settings.max_amplitude_pe must exceed min_amplitude_pe.");
+    }
+    if (s.max_refit_steps < 0) {
+        throw std::runtime_error("fit_settings.max_refit_steps must be nonnegative.");
+    }
+    if (s.refit_tolerance <= 0.0) {
+        throw std::runtime_error("fit_settings.refit_tolerance must be positive.");
+    }
+    if (s.prune_delta_nll_cut < 0.0) {
+        throw std::runtime_error("fit_settings.prune_delta_nll_cut must be nonnegative.");
+    }
+    if (s.max_prune_passes < 0) {
+        throw std::runtime_error("fit_settings.max_prune_passes must be nonnegative.");
+    }
+}
+
 template <typename T>
 T get_or(const json& j, const char* key, const T& fallback) {
     return j.contains(key) ? j.at(key).get<T>() : fallback;
@@ -263,62 +302,58 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
     }
 
     if (j.contains("fit_settings")) {
-        const json& f = j.at("fit_settings");
-        cfg.fit_settings.scan_step_us =
-            get_or<double>(f, "scan_step_us", cfg.fit_settings.scan_step_us);
-        cfg.fit_settings.max_offset_us =
-            get_or<double>(f, "max_offset_us", cfg.fit_settings.max_offset_us);
-        cfg.fit_settings.delta_nll_cut =
-            get_or<double>(f, "delta_nll_cut", cfg.fit_settings.delta_nll_cut);
-        cfg.fit_settings.min_spacing_us =
-            get_or<double>(f, "min_spacing_us", cfg.fit_settings.min_spacing_us);
-        cfg.fit_settings.min_amplitude_pe =
-            get_or<double>(f, "min_amplitude_pe", cfg.fit_settings.min_amplitude_pe);
-        cfg.fit_settings.max_amplitude_pe =
-            get_or<double>(f, "max_amplitude_pe", cfg.fit_settings.max_amplitude_pe);
-        cfg.fit_settings.background_per_bin =
-            get_or<double>(f, "background_per_bin", cfg.fit_settings.background_per_bin);
-        cfg.fit_settings.cluster_gap_us =
-            get_or<double>(f, "cluster_gap_us", cfg.fit_settings.cluster_gap_us);
-        cfg.fit_settings.max_coordinate_descent_steps =
-            get_or<int>(f, "max_coordinate_descent_steps",
-                        cfg.fit_settings.max_coordinate_descent_steps);
-        
-        cfg.fit_settings.enable_back_pruning =
-            get_or<bool>(f, "enable_back_pruning", cfg.fit_settings.enable_back_pruning);
-        cfg.fit_settings.allow_multiple_fits_per_cluster = 
-            get_or<bool>(f, "allow_multiple_fits_per_cluster", cfg.fit_settings.allow_multiple_fits_per_cluster);
-        cfg.fit_settings.use_cluster_local_amplitude_fit =
-            get_or<bool>(f, "use_cluster_local_amplitude_fit", cfg.fit_settings.use_cluster_local_amplitude_fit);
-        cfg.fit_settings.local_template_mass_floor =
-            get_or<double>(f, "local_template_mass_floor", cfg.fit_settings.local_template_mass_floor);
-        cfg.fit_settings.enable_final_simultaneous_refit =
-            get_or<bool>(f, "enable_final_simultaneous_refit", cfg.fit_settings.enable_final_simultaneous_refit);
-        cfg.fit_settings.enable_close_pulse_regularization =
-            get_or<bool>(f, "enable_close_pulse_regularization", cfg.fit_settings.enable_close_pulse_regularization);
-        cfg.fit_settings.close_reg_lambda_nll =
-            get_or<double>(f, "close_reg_lambda_nll", cfg.fit_settings.close_reg_lambda_nll);
-        cfg.fit_settings.close_reg_window_us =
-            get_or<double>(f, "close_reg_window_us", cfg.fit_settings.close_reg_window_us);
-        cfg.fit_settings.close_reg_close_tau_us =
-            get_or<double>(f, "close_reg_close_tau_us", cfg.fit_settings.close_reg_close_tau_us);
-        cfg.fit_settings.close_reg_tail_tau_us =
-            get_or<double>(f, "close_reg_tail_tau_us", cfg.fit_settings.close_reg_tail_tau_us);
-        cfg.fit_settings.close_reg_eta =
-            get_or<double>(f, "close_reg_eta", cfg.fit_settings.close_reg_eta);
-        cfg.fit_settings.close_reg_floor_pe =
-            get_or<double>(f, "close_reg_floor_pe", cfg.fit_settings.close_reg_floor_pe);
+        const auto& f = j.at("fit_settings");
 
-        cfg.fit_settings.enable_local_evidence =
-            get_or<bool>(f, "enable_local_evidence", cfg.fit_settings.enable_local_evidence);
-        cfg.fit_settings.local_evidence_pre_us =
-            get_or<double>(f, "local_evidence_pre_us", cfg.fit_settings.local_evidence_pre_us);
-        cfg.fit_settings.local_evidence_post_us =
-            get_or<double>(f, "local_evidence_post_us", cfg.fit_settings.local_evidence_post_us);
-        cfg.fit_settings.local_delta_nll_cut =
-            get_or<double>(f, "local_delta_nll_cut", cfg.fit_settings.local_delta_nll_cut);
+        cfg.fit_settings.scan_step_us =
+            get_or(f, "scan_step_us", cfg.fit_settings.scan_step_us);
+
+        cfg.fit_settings.max_offset_us =
+            get_or(f, "max_offset_us", cfg.fit_settings.max_offset_us);
+
+        cfg.fit_settings.cluster_gap_us =
+            get_or(f, "cluster_gap_us", cfg.fit_settings.cluster_gap_us);
+
+        cfg.fit_settings.min_spacing_us =
+            get_or(f, "min_spacing_us", cfg.fit_settings.min_spacing_us);
+
+        cfg.fit_settings.allow_multiple_fits_per_cluster =
+            get_or(f, "allow_multiple_fits_per_cluster",
+                    cfg.fit_settings.allow_multiple_fits_per_cluster);
+
+        cfg.fit_settings.discovery_delta_nll_cut =
+            get_or(f, "discovery_delta_nll_cut",
+                    cfg.fit_settings.discovery_delta_nll_cut);
+
+        cfg.fit_settings.local_template_mass_floor =
+            get_or(f, "local_template_mass_floor",
+                    cfg.fit_settings.local_template_mass_floor);
+
+        cfg.fit_settings.min_amplitude_pe =
+            get_or(f, "min_amplitude_pe",
+                    cfg.fit_settings.min_amplitude_pe);
+
+        cfg.fit_settings.max_amplitude_pe =
+            get_or(f, "max_amplitude_pe",
+                    cfg.fit_settings.max_amplitude_pe);
+
+        cfg.fit_settings.max_refit_steps =
+            get_or(f, "max_refit_steps",
+                    cfg.fit_settings.max_refit_steps);
+
+        cfg.fit_settings.refit_tolerance =
+            get_or(f, "refit_tolerance",
+                    cfg.fit_settings.refit_tolerance);
+
+        cfg.fit_settings.prune_delta_nll_cut =
+            get_or(f, "prune_delta_nll_cut",
+                    cfg.fit_settings.prune_delta_nll_cut);
+
+        cfg.fit_settings.max_prune_passes =
+            get_or(f, "max_prune_passes",
+                    cfg.fit_settings.max_prune_passes);
     }
 
+    validate_fit_settings(cfg.fit_settings);
     load_runinfo_if_present(cfg);
     load_good_runs_if_present(cfg);
 

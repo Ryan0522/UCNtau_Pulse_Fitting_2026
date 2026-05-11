@@ -72,14 +72,8 @@ struct LRTTrialDebug {
     double nll_before = 0.0;
     double nll_after = 0.0;
     double delta_nll = 0.0;
-
-    double penalty_nll = 0.0;
-    double required_delta_nll = 0.0;
-
-    double local_delta_nll = 0.0;
-    int local_pass = 1;
-
     double margin = 0.0;
+    
     int accepted = 0;
 };
 

@@ -40,7 +40,8 @@ std::vector<double> refit_all_amplitudes(
     double background_per_bin,
     double min_amplitude_pe,
     double max_amplitude_pe,
-    int max_steps
+    int max_steps,
+    double tolerance
 );
 
 } // namespace ucn::likelihood

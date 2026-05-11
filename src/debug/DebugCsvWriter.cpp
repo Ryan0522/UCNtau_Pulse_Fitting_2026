@@ -25,10 +25,6 @@ void write_lrt_row(std::ofstream& out, const LRTTrialDebug& r) {
         << r.nll_before << ','
         << r.nll_after << ','
         << r.delta_nll << ','
-        << r.penalty_nll << ','
-        << r.required_delta_nll << ','
-        << r.local_delta_nll << ','
-        << r.local_pass << ','
         << r.margin << ','
         << r.accepted << '\n';
 }
@@ -75,12 +71,10 @@ void DebugCsvWriter::write_headers() {
                 << "unit_template,component_expected\n";
 
     lrt_trials_ << "case_id,status,fit_iter,cluster_index,trial_time_us,trial_amp,"
-                << "nll_before,nll_after,delta_nll,penalty_nll,required_delta_nll,"
-                << "local_delta_nll,local_pass,margin,accepted\n";
+                << "nll_before,nll_after,delta_nll,margin,accepted\n";
 
     lrt_accepts_ << "case_id,status,fit_iter,cluster_index,trial_time_us,trial_amp,"
-                 << "nll_before,nll_after,delta_nll,penalty_nll,required_delta_nll,"
-                 << "local_delta_nll,local_pass,margin,accepted\n";
+                 << "nll_before,nll_after,delta_nll,margin,accepted\n";
 }
 
 bool DebugCsvWriter::can_capture(DebugCaseType type, double hold_time_s) const {

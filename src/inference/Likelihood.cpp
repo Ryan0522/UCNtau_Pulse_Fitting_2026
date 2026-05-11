@@ -135,7 +135,8 @@ std::vector<double> refit_all_amplitudes(
     double background_per_bin,
     double min_amplitude_pe,
     double max_amplitude_pe,
-    int max_steps
+    int max_steps,
+    double tolerance
 ) {
     if (components.size() != initial_amplitudes.size()) {
         throw std::invalid_argument("components and initial_amplitudes must have the same size.");
@@ -151,6 +152,7 @@ std::vector<double> refit_all_amplitudes(
 
     for (int step = 0; step < max_steps; ++step) {
         bool changed = false;
+        double max_change = 0.0;
         for (std::size_t j = 0; j < amplitudes.size(); ++j) {
             std::vector<double> base(observed.size(), 0.0);
             for (std::size_t k = 0; k < amplitudes.size(); ++k) {
@@ -171,6 +173,10 @@ std::vector<double> refit_all_amplitudes(
                 max_amplitude_pe,
                 amplitudes[j]
             );
+            max_change = std::max(max_change, std::abs(updated - amplitudes[j]));
+            if (max_change < tolerance) {
+                break;
+            }
             if (std::abs(updated - amplitudes[j]) > 1e-9) {
                 amplitudes[j] = updated;
                 changed = true;
