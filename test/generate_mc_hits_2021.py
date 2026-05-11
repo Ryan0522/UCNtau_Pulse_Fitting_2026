@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from pathlib import Path
 
 def load_pe_group_pmf(
     pmf_csv, segment=12, region="signal", pe_group="40-50", support_end_us=500.0,    
@@ -140,6 +141,9 @@ def sample_template_times_us(rng, cdf, n, bin_width_us, deformation_k=1.0):
     return idx * bin_width_us + jitter
 
 def sample_poisson_arrivals_us(rng, rate_hz, start_us, end_us):
+    if rate_hz <= 0.0 or not np.isfinite(rate_hz):
+        return np.array([], dtype=float)
+
     mean_dt_us = 1e6 / rate_hz
     arrivals = []
 
@@ -161,31 +165,23 @@ def generate_pulse_hits_guaranteed_coincidence(
     coincidence_window_us=0.05,
     deformation_k=1.0,
 ):
-    anchor_rel = sample_template_times_us(rng, cdf, 1, template_bin_width_us, deformation_k)[0]
+    all_rel_times = sample_template_times_us(rng, cdf, amp, template_bin_width_us, deformation_k)
+    anchor_rel = np.min(all_rel_times)
     max_pair_offset = 0.4 * coincidence_window_us
     delta = rng.uniform(-max_pair_offset, max_pair_offset)
 
     t_pair_1 = t0_us + anchor_rel
     t_pair_2 = t0_us + anchor_rel + delta
-
     times = [t_pair_1, t_pair_2]
     channels = [1, 2]
 
-    remaining = amp - 2
-    n_extra_ch1 = rng.binomial(remaining, 0.5)
-    n_extra_ch2 = remaining - n_extra_ch1
+    remaining_rel = np.sort(all_rel_times)[2:]
+    if len(remaining_rel) > 0:
+        times.extend(t0_us + remaining_rel)
+        channels.extend(rng.choice([1, 2], size=len(remaining_rel)))
 
-    if n_extra_ch1 > 0:
-        rel1 = sample_template_times_us(rng, cdf, n_extra_ch1, template_bin_width_us, deformation_k)
-        times.extend(t0_us + rel1)
-        channels.extend([1] * n_extra_ch1)
+    return np.asarray(times), np.asanyarray(channels)
 
-    if n_extra_ch2 > 0:
-        rel2 = sample_template_times_us(rng, cdf, n_extra_ch2, template_bin_width_us, deformation_k)
-        times.extend(t0_us + rel2)
-        channels.extend([2] * n_extra_ch2)
-
-    return np.asarray(times), np.asarray(channels)
 
 # ============================================================
 # Dataset generators
@@ -209,6 +205,11 @@ def generate_empirical_mc_dataset(
     timing_shift_us=0.0,
     repeat_rate_curve=False,
     rng=None,
+    output_dir = "test/",
+    template_reference_offset_us=20.0,
+    amplitude_scale=1.0,
+    amplitude_shift_pe=0.0,
+    amplitude_max_pe=400,
 ):
     """
     General empirical MC generator.
@@ -251,12 +252,23 @@ def generate_empirical_mc_dataset(
         pe_min=2,
         pe_max=200,
     )
-    true_amplitudes = sample_pe(rng, n_pulses)
+    raw_amplitudes = sample_pe(rng, n_pulses)
+    true_amplitudes = np.rint(
+        raw_amplitudes * amplitude_scale + amplitude_shift_pe
+    ).astype(int)
+    true_amplitudes = np.clip(true_amplitudes, 2, amplitude_max_pe)
+
+    template_start_times_us = true_times_us - template_reference_offset_us
 
     truth_df = pd.DataFrame({
         "time_us": true_times_us,
+        "template_start_us": template_start_times_us,
+        "template_reference_offset_us": template_reference_offset_us,
         "time_rel_s": (true_times_us - signal_start_us) * 1.0e-6,
         "amplitude_pe": true_amplitudes,
+        "raw_amplitude_pe": raw_amplitudes,
+        "amplitude_scale": amplitude_scale,
+        "amplitude_shift_pe": amplitude_shift_pe,
         "segment": segment,
         "pe_group_for_pmf": pe_group,
         "rate_scale": rate_scale,
@@ -266,8 +278,9 @@ def generate_empirical_mc_dataset(
         "rate_period_s": rate_period_s,
     })
 
-    truth_path = f"./test/mc_truth_{suffix}.csv"
-    hits_path = f"./test/mc_hits_{suffix}.csv"
+    output_dir = Path(output_dir)
+    truth_path = output_dir / f"mc_truth_{suffix}.csv"
+    hits_path = output_dir / f"mc_hits_{suffix}.csv"
 
     truth_df.to_csv(truth_path, index=False)
 
@@ -275,11 +288,15 @@ def generate_empirical_mc_dataset(
     all_channels = []
     all_types = []
 
-    for t0_us, amp in zip(true_times_us, true_amplitudes):
+    for pulse_time_us, template_start_us, amp in zip(
+        true_times_us,
+        template_start_times_us,
+        true_amplitudes,
+    ):
         abs_t, ch = generate_pulse_hits_guaranteed_coincidence(
             rng=rng,
-            t0_us=t0_us,
-            amp=amp,
+            t0_us=template_start_us,
+            amp=int(amp),
             cdf=cdf,
             template_bin_width_us=template_bin_width_us,
             coincidence_window_us=coincidence_window_us,
@@ -388,7 +405,7 @@ def compute_inter_neutron_dt_s(df, time_col="time_us"):
     return dt_s
 
 
-def save_truth_dt_summary(truth_df, suffix):
+def save_truth_dt_summary(truth_df, suffix, output_dir="test/"):
     """
     Small text/CSV summary so you can quickly check whether the 1 s region
     has enough statistics.
@@ -418,7 +435,8 @@ def save_truth_dt_summary(truth_df, suffix):
         })
 
     out = pd.DataFrame(rows)
-    path = f"mc_truth_dt_summary_{suffix}.csv"
+    output_dir = Path(output_dir)
+    path = output_dir / f"mc_truth_dt_summary_{suffix}.csv"
     out.to_csv(path, index=False)
     print(f"[write] {path}")
     print(out.to_string(index=False))
@@ -443,13 +461,18 @@ if __name__ == "__main__":
         pre_trigger_s=10.0,
         support_end_us=500.0,
         duration_s=60.0,
-        bkg_rate_hz_per_channel=100.0,
-        rate_scale=0.05,
+        bkg_rate_hz_per_channel=0.0,
+        rate_scale=1.0,
         deformation_k=1.0,
         coincidence_window_us=0.05,
         timing_shift_us=0.0,
-        repeat_rate_curve=True,
+        repeat_rate_curve=False,
         rng=np.random.default_rng(1),
+        output_dir=Path("test/"),
+        template_reference_offset_us=20.0,
+        amplitude_scale=1.15,
+        amplitude_shift_pe=5.0,
+        amplitude_max_pe=400.0,
     )
 
-    save_truth_dt_summary(truth_df, suffix)
+    save_truth_dt_summary(truth_df, suffix, output_dir=Path("test/"))
