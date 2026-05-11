@@ -481,7 +481,7 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
     return best;
 }
 
-FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
+FitResult GreedyLRTFitter::fit_cluster_local_sequential(
     const Histogram& histogram,
     const std::vector<ClusterBound>& bounds,
     const FitSettings& settings,
@@ -708,7 +708,7 @@ FitResult GreedyLRTFitter::fit(
     std::vector<ClusterBound> bounds = build_cluster_bounds(clusters, histogram, settings);
     
     if (settings.use_cluster_local_amplitude_fit) {
-        return fit_cluster_local_sequantial(
+        return fit_cluster_local_sequential(
             histogram, bounds, settings, debug_sink, debug_case_id
         );
     }

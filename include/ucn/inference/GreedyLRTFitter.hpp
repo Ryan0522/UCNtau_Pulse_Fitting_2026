@@ -40,7 +40,7 @@ private:
         const FitSettings& settings
     ) const;
 
-    FitResult fit_cluster_local_sequantial(
+    FitResult fit_cluster_local_sequential(
         const Histogram& histogram,
         const std::vector<ClusterBound>& bounds,
         const FitSettings& settings,
