@@ -316,10 +316,6 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.fit_settings.min_spacing_us =
             get_or(f, "min_spacing_us", cfg.fit_settings.min_spacing_us);
 
-        cfg.fit_settings.allow_multiple_fits_per_cluster =
-            get_or(f, "allow_multiple_fits_per_cluster",
-                    cfg.fit_settings.allow_multiple_fits_per_cluster);
-
         cfg.fit_settings.discovery_delta_nll_cut =
             get_or(f, "discovery_delta_nll_cut",
                     cfg.fit_settings.discovery_delta_nll_cut);

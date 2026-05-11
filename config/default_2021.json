@@ -99,9 +99,8 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "cluster_gap_us": 1.0,
-    "min_spacing_us": 2.0,
-    "allow_multiple_fits_per_cluster": false,
+    "cluster_gap_us": 2.0,
+    "min_spacing_us": 3.0,
 
     "discovery_delta_nll_cut": 10.0,
     "local_template_mass_floor": 0.001,

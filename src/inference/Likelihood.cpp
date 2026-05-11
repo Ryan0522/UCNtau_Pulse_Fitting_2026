@@ -3,9 +3,103 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <limits>
 
 namespace ucn::likelihood 
 {
+
+namespace 
+{
+    
+double nll_for_amplitudes(
+    const std::vector<double>& observed,
+    const std::vector<std::vector<double>>& components,
+    const std::vector<double>& amplitudes,
+    const std::vector<double>& fixed_expected,
+    double background_per_bin
+) {
+    const std::size_t n_bins = observed.size();
+    std::vector<double> mu(n_bins, std::max(0.0, background_per_bin));
+
+    if (!fixed_expected.empty()) {
+        for (std::size_t i = 0; i < n_bins; ++i) {
+            mu[i] += std::max(0.0, fixed_expected[i]);
+        }
+    }
+
+    for (std::size_t j = 0; j < components.size(); ++j) {
+        for (std::size_t i = 0; i < n_bins; ++i) {
+            mu[i] += amplitudes[j] * components[j][i];
+        }
+    }
+    
+    double nll = 0.0;
+    for (std::size_t i = 0; i < n_bins; ++i) {
+        const double m = std::max(mu[i], 1.0e-12);
+        nll += m - observed[i] * std::log(m);
+    }
+    return nll;
+}
+
+bool solve_dense_linear_system(
+    std::vector<std::vector<double>> A,
+    std::vector<double> b,
+    std::vector<double>& x
+) {
+    const std::size_t n = b.size();
+    x.assign(n, 0.0);
+    if (A.size() != n) return false;
+    for (const auto& row : A) {
+        if (row.size() != n) return false;
+    }
+
+    for (std::size_t col = 0; col < n; ++col) {
+        std::size_t pivot = col;
+        double best = std::abs(A[col][col]);
+        for (std::size_t row = col + 1; row < n; ++row) {
+            const double v = std::abs(A[row][col]);
+            if (v > best) {
+                best = v;
+                pivot = row;
+            }
+        }
+
+        if (best < 1.0e-14 || !std::isfinite(best)) return false;
+
+        if (pivot != col) {
+            std::swap(A[pivot], A[col]);
+            std::swap(b[pivot], b[col]);
+        }
+
+        const double diag = A[col][col];
+        for (std::size_t row = col + 1; row < n; ++row) {
+            const double factor = A[row][col] / diag;
+            if (factor == 0.0) continue;
+            A[row][col] = 0.0;
+            for (std::size_t k = col + 1; k < n; ++k) {
+                A[row][k] -= factor * A[col][k];
+            }
+            b[row] -= factor * b[col];
+        }
+    }
+
+    for (std::size_t rr = 0; rr < n; ++rr) {
+        const std::size_t row = n - 1 - rr;
+        double rhs = b[row];
+        for (std::size_t k = row + 1; k < n; ++k) {
+            rhs -= A[row][k] * x[k];
+        }
+        const double diag = A[row][row];
+        if (std::abs(diag) < 1.0e-14 || !std::isfinite(diag)) {
+            return false;
+        }
+        x[row] = rhs / diag;
+    }
+    return true;
+}
+
+} // namespace 
+
 
 std::vector<double> add_background_and_fixed(
      const std::vector<double>& expected,
@@ -144,45 +238,153 @@ std::vector<double> refit_all_amplitudes(
     if (components.empty()) {
         return std::vector<double>();
     }
-
-    std::vector<double> amplitudes = initial_amplitudes;
-    for (std::size_t j = 0; j < amplitudes.size(); ++j) {
-        amplitudes[j] = std::clamp(amplitudes[j], min_amplitude_pe, max_amplitude_pe);
+    if (!fixed_expected.empty() && fixed_expected.size() != observed.size()) {
+        throw std::invalid_argument("fixed_expected must match observed size.");
     }
 
-    for (int step = 0; step < max_steps; ++step) {
-        bool changed = false;
-        double max_change = 0.0;
-        for (std::size_t j = 0; j < amplitudes.size(); ++j) {
-            std::vector<double> base(observed.size(), 0.0);
-            for (std::size_t k = 0; k < amplitudes.size(); ++k) {
-                if (k == j) {
-                    continue;
-                }
-                for (std::size_t i = 0; i < base.size(); ++i) {
-                    base[i] += amplitudes[k] * components[k][i];
-                }
-            }
-            double updated = optimize_single_amplitude(
-                observed,
-                base,
-                components[j],
-                fixed_expected,
-                background_per_bin,
-                min_amplitude_pe,
-                max_amplitude_pe,
-                amplitudes[j]
-            );
-            max_change = std::max(max_change, std::abs(updated - amplitudes[j]));
-            if (max_change < tolerance) {
-                break;
-            }
-            if (std::abs(updated - amplitudes[j]) > 1e-9) {
-                amplitudes[j] = updated;
-                changed = true;
+    const std::size_t n_pulses = components.size();
+    const std::size_t n_bins = observed.size();
+    
+    const double lower = std::max(0.0, min_amplitude_pe);
+    const double upper = std::max(lower, max_amplitude_pe);
+    const double tol = std::max(tolerance, 1.0e-12);
+
+    std::vector<double> amplitudes = initial_amplitudes;
+    for (double& a : amplitudes) {
+        a = std::clamp(a, lower, upper);
+    }
+
+    for (int iter = 0; iter < max_steps; ++iter) {
+        std::vector<double> mu(n_bins, std::max(0.0, background_per_bin));
+        if (!fixed_expected.empty()) {
+            for (std::size_t i = 0; i < n_bins; ++i) {
+                mu[i] += std::max(0.0, fixed_expected[i]);
             }
         }
-        if (!changed) {
+        for (std::size_t j = 0; j < n_pulses; ++j) {
+            for (std::size_t i = 0; i < n_bins; ++i) {
+                mu[i] += amplitudes[j] * components[j][i];
+            }
+        }
+        for (double& m : mu) {
+            m = std::max(m, 1.0e-12);
+        }
+
+        std::vector<double> grad(n_pulses, 0.0);
+        std::vector<std::vector<double>> hess(n_pulses, std::vector<double>(n_pulses, 0.0));
+
+        for (std::size_t i = 0; i < n_bins; ++i) {
+            const double inv_mu = 1.0 / mu[i];
+            const double obs_over_mu = observed[i] * inv_mu;
+            const double h_weight = observed[i] * inv_mu * inv_mu;
+
+            for (std::size_t j = 0; j < n_pulses; ++j) {
+                const double sj = components[j][i];
+                grad[j] += sj * (1.0 - obs_over_mu);
+
+                for (std::size_t k = 0; k <= j; ++k) {
+                    hess[j][k] += h_weight * sj * components[k][i];
+                }
+            }
+        }
+        
+        for (std::size_t j = 0; j < n_pulses; ++j) {
+            for (std::size_t k = 0; k < j; ++k) {
+                hess[k][j] = hess[j][k];
+            }
+        }
+
+        std::vector<std::size_t> active;
+        active.reserve(n_pulses);
+        double max_kkt = 0.0;
+
+        for (std::size_t j = 0; j < n_pulses; ++j) {
+            const bool at_lower = amplitudes[j] <= lower + tol;
+            const bool at_upper = amplitudes[j] >= upper - tol;
+
+            double violation = 0.0;
+            if (at_lower) {
+                violation = std::max(0.0, -grad[j]);
+            } else if (at_upper) {
+                violation = std::max(0.0, grad[j]);
+            } else {
+                violation = std::abs(grad[j]);
+            }
+            max_kkt = std::max(max_kkt, violation);
+
+            const bool blocked_at_lower = at_lower && grad[j] >= 0.0;
+            const bool blocked_at_upper = at_upper && grad[j] <= 0.0;
+            if (!blocked_at_lower && !blocked_at_upper) {
+                active.push_back(j);
+            }
+        }
+
+        if (max_kkt < tol || active.empty()) break;
+
+        const std::size_t n_active = active.size();
+        std::vector<std::vector<double>> H(
+            n_active, std::vector<double>(n_active, 0.0)
+        );
+        std::vector<double> g(n_active, 0.0);
+
+        for (std::size_t r = 0; r < n_active; ++r) {
+            const std::size_t jr = active[r];
+            g[r] = grad[jr];
+            for (std::size_t c = 0; c < n_active; ++c) {
+                const std::size_t jc = active[c];
+                H[r][c] = hess[jr][jc];
+            }
+            H[r][r] += 1.0e-10 * (std::abs(H[r][r]) + 1.0);
+        }
+
+        std::vector<double> step;
+        if (!solve_dense_linear_system(H, g, step)) {
+            step.assign(n_active, 0.0);
+            for (std::size_t r = 0; r < n_active; ++r) {
+                const double diag = std::max(std::abs(H[r][r]), 1.0e-12);
+                step[r] = g[r] / diag;
+            }
+        }
+
+        const double nll_current = nll_for_amplitudes(
+            observed, components, amplitudes, fixed_expected, background_per_bin
+        );
+
+        bool accepted = false;
+        double max_change = 0.0;
+        std::vector<double> best = amplitudes;
+
+        double alpha = 1.0;
+        for (int ls = 0; ls < 30; ++ls) {
+            std::vector<double> trial = amplitudes;
+            max_change = 0.0;
+            for (std::size_t r = 0; r < n_active; ++r) {
+                const std::size_t j = active[r];
+                const double updated = std::clamp(
+                    amplitudes[j] - alpha * step[r], lower, upper
+                );
+                max_change = std::max(max_change, std::abs(updated - amplitudes[j]));
+                trial[j] = updated;
+            }
+
+            const double nll_trial = nll_for_amplitudes(
+                observed, components, trial, fixed_expected, background_per_bin
+            );
+
+            if (std::isfinite(nll_trial) && nll_trial <= nll_current) {
+                best = std::move(trial);
+                accepted = true;
+                break;
+            }
+            alpha *= 0.5;
+        }
+
+        if (!accepted) {
+            break;
+        }
+
+        amplitudes = std::move(best);
+        if (max_change < tol) {
             break;
         }
     }

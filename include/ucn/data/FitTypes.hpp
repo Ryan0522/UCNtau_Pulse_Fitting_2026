@@ -27,7 +27,6 @@ struct FitSettings {
     double max_offset_us = 5.0;
     double cluster_gap_us = 1.0;
     double min_spacing_us = 2.0;
-    bool allow_multiple_fits_per_cluster = false;
 
     // LRT acceptance
     double discovery_delta_nll_cut = 10.0;
