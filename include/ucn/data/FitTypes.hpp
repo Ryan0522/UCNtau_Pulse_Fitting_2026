@@ -34,6 +34,13 @@ struct FitSettings {
     bool enable_back_pruning = true;
     bool allow_multiple_fits_per_cluster = true;
 
+    // Experimental: one local amplitude fit per seed cluster.
+    // Uses only the cluster-local histogram partition, then rescales by
+    // actual template mass inside that local partition
+    bool use_cluster_local_amplitude_fit = false;
+    double local_template_mass_floor = 1.0e-6;    
+    bool enable_final_simultaneous_refit = false;
+
     // Method 1: close-pulse residual regularization.
     // Penalty = lambda * exp(-dt / close_tau) * exp(-A_new / residual_scale),
     // residual_scale = eta * A_prev * exp(-dt / tail_tau) + floor_pe.

@@ -4,6 +4,7 @@
 #include "ucn/debug/DebugTypes.hpp"
 #include <span>
 #include <vector>
+#include <string>
 
 namespace ucn
 {
@@ -37,6 +38,14 @@ private:
         const FitResult& current,
         const std::vector<std::vector<double>>& components,
         const FitSettings& settings
+    ) const;
+
+    FitResult fit_cluster_local_sequantial(
+        const Histogram& histogram,
+        const std::vector<ClusterBound>& bounds,
+        const FitSettings& settings,
+        ucn::debug::DebugSink* debug_sink,
+        const std::string& debug_case_id
     ) const;
 
     const PulseTemplate& pulse_template_;

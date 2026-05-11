@@ -132,6 +132,173 @@ bool passes_local_evidence(
     return local_delta_out >= settings.local_delta_nll_cut;
 }
 
+struct BinRange {
+    std::size_t first = 0;
+    std::size_t last = 0; // one past last
+};
+
+BinRange bins_overlapping_interval(
+    const Histogram& histogram,
+    double left_us,
+    double right_us
+) {
+    BinRange r;
+    r.first = histogram.counts.size();
+    r.last = histogram.counts.size();
+
+    if (right_us <= left_us || histogram.bin_edges_us.size() != histogram.counts.size() + 1) {
+        return r;
+    }
+
+    for (std::size_t i = 0; i < histogram.counts.size(); ++i) {
+        const double bin_left = histogram.bin_edges_us[i];
+        const double bin_right = histogram.bin_edges_us[i + 1];
+
+        if (bin_right <= left_us) continue;
+        if (bin_left >= right_us) break;
+
+        if (r.first == histogram.counts.size()) {
+            r.first = i;
+        }
+        r.last = i + 1;
+    }
+
+    if (r.first == histogram.counts.size()) {
+        r.first = 0;
+        r.last = 0;
+    }
+
+    return r;
+}
+
+BinRange local_partition_for_cluster(
+    const Histogram& histogram,
+    const std::vector<ClusterBound>& bounds,
+    std::size_t cluster_index
+) {
+    if (bounds.empty() || cluster_index >= bounds.size()) {
+        return {};
+    }
+
+    const double hist_left = histogram.bin_edges_us.front();
+    const double hist_right = histogram.bin_edges_us.back();
+    const double center = bounds[cluster_index].cluster_time_us;
+
+    double left = hist_left;
+    double right = hist_right;
+
+    if (cluster_index > 0) {
+        left = 0.5 * (bounds[cluster_index - 1].cluster_time_us + center);
+    }
+    if (cluster_index + 1 < bounds.size()) {
+        right = 0.5 * (center + bounds[cluster_index + 1].cluster_time_us);
+    }
+
+    left = std::clamp(left, hist_left, hist_right);
+    right = std::clamp(right, hist_left, hist_right);
+
+    return bins_overlapping_interval(histogram, left, right);
+}
+
+double poisson_nll_range(
+    const Histogram& histogram,
+    const std::vector<double>& expected,
+    const FitSettings& settings,
+    BinRange range
+) {
+    range.last = std::min(range.last, histogram.counts.size());
+
+    double nll = 0.0;
+    for (std::size_t i = range.first; i < range.last; ++i) {
+        const double fixed = settings.fixed_expected.empty() ? 0.0 : settings.fixed_expected[i];
+        nll += poisson_nll_bin(
+            histogram.counts[i],
+            expected[i],
+            fixed,
+            settings.background_per_bin
+        );
+    }
+    return nll;
+}
+
+std::vector<double> add_scaled_component(
+    const std::vector<double>& base,
+    const std::vector<double>& component,
+    double amplitude
+) {
+    std::vector<double> out = base;
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        out[i] += amplitude * component[i];
+    }
+    return out;
+}
+
+double optimizer_cluster_local_full_amplitude(
+    const Histogram& histogram,
+    const std::vector<double>& base_expected,
+    const std::vector<double>& component,
+    const FitSettings& settings,
+    BinRange range,
+    double& local_mass_out
+) {
+    range.last = std::min(range.last, histogram.counts.size());
+
+    local_mass_out = 0.0;
+    for (std::size_t i = range.first; i < range.last; ++i) {
+        local_mass_out += component[i];
+    }
+    if (!(local_mass_out > settings.local_template_mass_floor) ||
+        !std::isfinite(local_mass_out)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    const double local_upper = std::max(0.0, settings.max_amplitude_pe * local_mass_out);
+
+    double local_amp = 0.0;
+    for (std::size_t i = range.first; i < range.last; ++i) {
+        const double fixed = settings.fixed_expected.empty() ? 0.0 : settings.fixed_expected[i];
+        const double residual = 
+            histogram.counts[i]
+            - base_expected[i]
+            - fixed
+            - settings.background_per_bin;
+
+        if (residual > 0.0) {
+            local_amp += residual;
+        }
+    }
+
+    local_amp = std::clamp(local_amp, 0.0, local_upper);
+    for (int iter = 0; iter < 40; ++iter) {
+        double grad = 0.0, hess = 0.0;
+        for (std::size_t i = range.first; i < range.last; ++i) {
+            const double s_local = component[i] / local_mass_out;
+            double mu = base_expected[i] + local_amp * s_local;
+            if (!settings.fixed_expected.empty()) {
+                mu += std::max(0.0, settings.fixed_expected[i]);
+            }
+            mu += std::max(0.0, settings.background_per_bin);
+            mu = std::max(mu, 1.0e-12);
+
+            grad += s_local * (1.0 - histogram.counts[i] / mu);
+            hess += s_local * s_local * histogram.counts[i] / (mu * mu);
+        }
+
+        if (std::abs(grad) < 1.0e-10) break;
+        if (hess <= 1.0e-12) break;
+
+        double candidate = local_amp - grad / hess;
+        candidate = std::clamp(candidate, 0.0, local_upper);
+
+        if (std::abs(candidate - local_amp) < 1.0e-10) {
+            local_amp = candidate;
+            break;
+        }
+        local_amp = candidate;
+    }
+    return local_amp / local_mass_out;
+}
+
 } // namespace
 
 GreedyLRTFitter::GreedyLRTFitter(const PulseTemplate& pulse_template)
@@ -310,6 +477,185 @@ FitResult GreedyLRTFitter::remove_weak_pulses(
     return best;
 }
 
+FitResult GreedyLRTFitter::fit_cluster_local_sequantial(
+    const Histogram& histogram,
+    const std::vector<ClusterBound>& bounds,
+    const FitSettings& settings,
+    ucn::debug::DebugSink* debug_sink,
+    const std::string& debug_case_id
+) const {
+    FitResult result;
+    result.expected_total.assign(histogram.counts.size(), 0.0);
+    result.final_nll = likelihood::poisson_nll(
+        histogram.counts,
+        result.expected_total,
+        settings.fixed_expected,
+        settings.background_per_bin
+    );
+
+    std::vector<std::vector<double>> components;
+    
+    auto candidate_is_too_close = [&](double candidate_time_us) {
+        for (const PulseCandidate& pulse : result.pulses) {
+            if (std::abs(pulse.time_us - candidate_time_us) < settings.min_spacing_us) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto emit_debug_row = [&](
+        const std::string& status, int cluster_index, double trial_time_us,
+        double trial_amp, double nll_before, double nll_after, double delta_nll,
+        double penalty_nll, double required_delta_nll, double margin, int accepted
+    ) {
+        if (!debug_sink) return;
+
+         ucn::debug::LRTTrialDebug row;
+        row.case_id = debug_case_id;
+        row.status = status;
+        row.cluster_index = cluster_index;
+        row.trial_time_us = trial_time_us;
+        row.trial_amp = trial_amp;
+        row.nll_before = nll_before;
+        row.nll_after = nll_after;
+        row.delta_nll = delta_nll;
+        row.penalty_nll = penalty_nll;
+        row.required_delta_nll = required_delta_nll;
+        row.margin = margin;
+        row.accepted = accepted;
+
+        if (accepted) {
+            debug_sink->on_lrt_accept(row);
+        } else {
+            debug_sink->on_lrt_trial(row);
+        }
+    };
+
+    for (std::size_t cluster_index = 0; cluster_index < bounds.size(); ++cluster_index) {
+        const ClusterBound& bound = bounds[cluster_index];
+        const BinRange local_range = local_partition_for_cluster(histogram, bounds, cluster_index);
+
+        if (local_range.last <= local_range.first) {
+            emit_debug_row(
+                "local_skip_empty_partition", static_cast<int>(cluster_index), bound.cluster_time_us, 0.0,
+                result.final_nll, result.final_nll, 0.0, 0.0,
+                settings.delta_nll_cut, -std::numeric_limits<double>::infinity(), 0
+            );
+            continue;
+        }
+
+        const double old_local_nll = poisson_nll_range(
+            histogram, result.expected_total, settings, local_range
+        );
+
+        double best_margin = -std::numeric_limits<double>::infinity();
+        double best_delta = 0.0;
+        double best_penalty = 0.0;
+        double best_required_delta = settings.delta_nll_cut;
+        double best_time = 0.0;
+        double best_amplitude = 0.0;
+        std::vector<double> best_component;
+        std::vector<double> best_expected;
+
+        for (double time_us = bound.left_us;
+             time_us <= bound.right_us + 0.5 * settings.scan_step_us;
+             time_us += settings.scan_step_us) {
+            if (candidate_is_too_close(time_us)) {
+                emit_debug_row(
+                    "local_skip_too_close", static_cast<int>(cluster_index), time_us, 0.0,
+                    old_local_nll, old_local_nll, 0.0, 0.0,
+                    settings.delta_nll_cut, -std::numeric_limits<double>::infinity(), 0
+                );
+                continue;
+            }
+
+            std::vector<double> component = pulse_template_.shifted_to_histogram(time_us, histogram.bin_edges_us);
+            double local_mass = 0.0;
+            const double amplitude = optimizer_cluster_local_full_amplitude(
+                histogram, result.expected_total, component,
+                settings, local_range, local_mass
+            );
+
+            if (!std::isfinite(amplitude)) {
+                emit_debug_row(
+                    "local_skip_low_mass", static_cast<int>(cluster_index), time_us, 0.0,
+                    old_local_nll, old_local_nll, 0.0, 0.0,
+                    settings.delta_nll_cut, -std::numeric_limits<double>::infinity(), 0
+                );
+                continue;
+            }
+            if (amplitude < settings.min_amplitude_pe) {
+                emit_debug_row(
+                    "local_skip_low_amp", static_cast<int>(cluster_index), time_us, amplitude,
+                    old_local_nll, old_local_nll, 0.0, 0.0,
+                    settings.delta_nll_cut, -std::numeric_limits<double>::infinity(), 0
+                );
+                continue;
+            }
+
+            std::vector<double> trial_expected = add_scaled_component(result.expected_total, component, amplitude);
+            const double trial_local_nll = poisson_nll_range(
+                histogram, trial_expected, settings, local_range
+            );
+
+            const double local_delta = old_local_nll - trial_local_nll;
+
+            PulseCandidate candidate{time_us, amplitude};
+            const double penalty = close_pulse_regularization_penalty(
+                candidate,
+                result.pulses,
+                settings
+            );
+
+            const double required_delta = settings.delta_nll_cut + penalty;
+            const double margin = local_delta - required_delta;
+
+            emit_debug_row(
+                "local_candidate", static_cast<int>(cluster_index), time_us, amplitude,
+                old_local_nll, trial_local_nll, local_delta, penalty,
+                required_delta, margin, 0
+            );
+
+            if (margin > best_margin) {
+                best_margin = margin;
+                best_delta = local_delta;
+                best_penalty = penalty;
+                best_required_delta = required_delta;
+                best_time = time_us;
+                best_amplitude = amplitude;
+                best_component = std::move(component);
+                best_expected = std::move(trial_expected);
+            }
+        }
+
+        if (best_margin < 0.0 || best_component.empty()) {
+            emit_debug_row(
+                "local_reject_cluster", static_cast<int>(cluster_index), bound.cluster_time_us, best_amplitude,
+                old_local_nll, old_local_nll, best_delta, best_penalty,
+                best_required_delta, best_margin, 0
+            );
+            continue;
+        }
+
+        emit_debug_row(
+            "local_accept", static_cast<int>(cluster_index), best_time, best_amplitude,
+            old_local_nll, old_local_nll - best_delta, best_delta, best_penalty,
+            best_required_delta, best_margin, 1
+        );
+
+        result.pulses.push_back(PulseCandidate{best_time, best_amplitude});
+        components.push_back(std::move(best_component));
+        result.expected_total = std::move(best_expected);
+
+        result.final_nll = likelihood::poisson_nll(
+            histogram.counts, result.expected_total, settings.fixed_expected, settings.background_per_bin
+        );
+    }
+
+    return result;
+}
+
 FitResult GreedyLRTFitter::fit(
     const Histogram& histogram,
     std::span<const double> coincidence_times_us,
@@ -341,6 +687,13 @@ FitResult GreedyLRTFitter::fit(
     );
 
     std::vector<ClusterBound> bounds = build_cluster_bounds(clusters, histogram, settings);
+    
+    if (settings.use_cluster_local_amplitude_fit) {
+        return fit_cluster_local_sequantial(
+            histogram, bounds, settings, debug_sink, debug_case_id
+        );
+    }
+    
     std::vector<bool> cluster_used(bounds.size(), false);
 
     auto candidate_is_too_close = [&](double candidate_time_us) {
