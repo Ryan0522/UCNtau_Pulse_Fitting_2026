@@ -18,7 +18,7 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "debug_cfwin_emp_10nll_fw500_pad10_500_5PE_bg_nofe_nomulti_noprune_norefit_epoch1",
+  "array_output_subdir": "debug_cfwin_emp_30nll_fw500_pad10_500_5PE_bg_fe_prune_refit_epoch1",
   "shard_index": 0,
   "num_shards": 1,
 
@@ -99,10 +99,10 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 5.0,
-    "cluster_gap_us": 2.0,
-    "min_spacing_us": 3.0,
+    "cluster_gap_us": 10.0,
+    "min_spacing_us": 10.0,
 
-    "discovery_delta_nll_cut": 10.0,
+    "discovery_delta_nll_cut": 30.0,
     "local_template_mass_floor": 0.001,
 
     "min_amplitude_pe": 5.0,
