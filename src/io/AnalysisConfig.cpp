@@ -272,6 +272,19 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
                            cfg.region_settings.background_tolerance_fraction);
         cfg.region_settings.enable_background_fit =
             get_or<bool>(r, "enable_background_fit", cfg.region_settings.enable_background_fit);
+
+        cfg.region_settings.enable_local_background =
+            get_or<bool>(r, "enable_local_background", cfg.region_settings.enable_local_background);
+        cfg.region_settings.local_bg_lookback_us =
+            get_or<double>(r, "local_bg_lookback_us", cfg.region_settings.local_bg_lookback_us);
+        cfg.region_settings.local_bg_min_us =
+            get_or<double>(r, "local_bg_min_us", cfg.region_settings.local_bg_min_us);
+        cfg.region_settings.local_bg_guard_us =
+            get_or<double>(r, "local_bg_guard_us", cfg.region_settings.local_bg_guard_us);
+        cfg.region_settings.local_bg_alpha =
+            get_or<double>(r, "local_bg_alpha", cfg.region_settings.local_bg_alpha);
+        cfg.region_settings.local_bg_max_scale =
+            get_or<double>(r, "local_bg_max_scale", cfg.region_settings.local_bg_max_scale);
     }
 
     if (j.contains("tail_extraction_settings")) {

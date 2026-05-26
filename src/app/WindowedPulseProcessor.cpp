@@ -10,6 +10,48 @@
 namespace ucn {
 namespace {
 
+struct LocalBgEstimate {
+    double rate_hz = 0.0;
+    double gap_us = 0.0;
+    int hits = 0;
+    bool valid = false;
+};
+
+LocalBgEstimate estimate_local_bg_before_window(
+    const std::vector<ucn::Hit>& hits,
+    double window_start_us, double signal_start_us,
+    double lookback_us, double min_gap_us, double guard_us
+) {
+    LocalBgEstimate out;
+    
+    const double gap_end_us = window_start_us - guard_us;
+    const double gap_start_us = std::max(signal_start_us, gap_end_us - lookback_us);
+    const double gap_us = gap_end_us - gap_start_us;
+    if (gap_end_us <= gap_start_us || gap_us < min_gap_us) return out;
+
+    auto first = std::lower_bound(
+        hits.begin(),
+        hits.end(),
+        gap_start_us,
+        [](const ucn::Hit& h, double t) {
+            return h.time_us < t;
+        }
+    );
+
+    int n_hits = 0;
+
+    for (auto it = first; it != hits.end() && it->time_us < gap_end_us; ++it) {
+        ++n_hits;
+    }
+
+    out.gap_us = gap_us;
+    out.hits = n_hits;
+    out.rate_hz = static_cast<double>(n_hits) / (gap_us * 1.0e-6);
+    out.valid = true;
+
+    return out;
+}
+
 double sum_vector(const std::vector<double>& xs) {
     return std::accumulate(xs.begin(), xs.end(), 0.0);
 }
@@ -390,6 +432,7 @@ void WindowedPulseProcessor::fit_stream(
 
     int i = 0;
     int window_index = 0;
+    double running_bg_rate_hz = background_rate_hz;
     
     while (i < static_cast<int>(hits.size())) {
 
@@ -486,8 +529,42 @@ void WindowedPulseProcessor::fit_stream(
             }
         }
 
+        double window_background_rate_hz = background_rate_hz;
+        LocalBgEstimate gap_bg;
+
+        if (region_settings.enable_gap_background && region_name == "signal") {
+            gap_bg = estimate_local_bg_before_window(
+                hits,
+                start_time_us,
+                hits.empty() ? start_time_us : hits.front().time_us,
+                region_settings.gap_background_lookback_us,
+                region_settings.gap_background_min_us,
+                region_settings.gap_background_guard_us
+            );
+
+            if (gap_bg.valid) {
+                const double max_rate_hz =
+                    region_settings.gap_background_max_scale
+                    * std::max(1.0, background_rate_hz);
+
+                double measured_rate_hz = std::min(gap_bg.rate_hz, max_rate_hz);
+
+                const double alpha = std::clamp(
+                    region_settings.gap_background_alpha,
+                    0.0,
+                    1.0
+                );
+
+                running_background_rate_hz =
+                    (1.0 - alpha) * running_background_rate_hz
+                    + alpha * measured_rate_hz;
+            }
+
+            window_background_rate_hz = running_background_rate_hz;
+        }
+
         FitSettings window_fit_settings = fit_settings;
-        window_fit_settings.background_per_bin = background_rate_hz * bin_width_us * 1.0e-6;
+        window_fit_settings.background_per_bin = window_background_rate_hz * bin_width_us * 1.0e-6;
         window_fit_settings.fixed_expected = fixed_expected;
 
         FitResult fit = fitter_.fit(
@@ -616,6 +693,10 @@ void WindowedPulseProcessor::fit_stream(
         summary.pe_per_observed_count = pe_per_observed_count;
         summary.background_fraction = background_fraction;
         summary.fit_fraction = fit_fraction;
+        summary.local_background_rate_hz = window_background_rate_hz;
+        summary.local_background_gap_us = gap_bg.gap_us;
+        summary.local_background_gap_hits = gap_bg.hits;
+        summary.local_background_updated = gap_bg.valid;
         output_summaries.push_back(summary);
 
         double template_support_us = static_cast<double>(pulse_template_.pmf().size()) * pulse_template_.native_bin_width_us();
