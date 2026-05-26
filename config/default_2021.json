@@ -18,7 +18,7 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "debug_cfwin_emp_30nll_fw500_pad10_500_5PE_bg_fe_prune_refit_epoch1",
+  "array_output_subdir": "debug_cfwin_emp_30nll_fw500_pad10_500_5PE_localbg_fe_prune_refit_epoch1",
   "shard_index": 0,
   "num_shards": 1,
 

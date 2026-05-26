@@ -157,6 +157,8 @@ int main(int argc, char** argv) {
                 "fitted_pe_sum,fit_expected_sum,fixed_expected_sum,"
                 "background_expected_sum,template_mass_in_window,"
                 "pe_per_observed_count,background_fraction,fit_fraction,"
+                "local_background_rate_hz,local_background_gap_us,"
+                "local_background_gap_hits,local_background_updated,"
                 "chunk_index\n";
 
         // MC signal starts at 10 s.
@@ -251,6 +253,10 @@ int main(int argc, char** argv) {
                         << w.pe_per_observed_count << ","
                         << w.background_fraction << ","
                         << w.fit_fraction << ","
+                        << w.local_background_rate_hz << ","
+                        << w.local_background_gap_us << ","
+                        << w.local_background_gap_hits << ","
+                        << (w.local_background_updated ? 1 : 0) << ","
                         << chunk
                         << "\n";
 

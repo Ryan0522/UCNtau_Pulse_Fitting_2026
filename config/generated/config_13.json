@@ -14,7 +14,7 @@
   "tems_tree_name": "tems",
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
-  "array_output_subdir": "debug_cfwin_emp_30nll_fw500_pad10_500_5PE_bg_fe_prune_refit_epoch1",
+  "array_output_subdir": "debug_cfwin_emp_30nll_fw500_pad10_500_5PE_localbg_fe_prune_refit_epoch1",
   "shard_index": 13,
   "num_shards": 32,
   "debug_max_windows": 50,
@@ -68,7 +68,13 @@
     "background_duration_us": 10000000.0,
     "background_iterations": 10,
     "background_tolerance_fraction": 0.01,
-    "enable_background_fit": true
+    "enable_background_fit": true,
+    "enable_local_background": true,
+    "local_bg_lookback_us": 5000.0,
+    "local_bg_min_us": 1000.0,
+    "local_bg_guard_us": 10.0,
+    "local_bg_alpha": 0.5,
+    "local_bg_max_scale": 10.0
   },
   "tail_extraction_settings": {
     "enable": false,
