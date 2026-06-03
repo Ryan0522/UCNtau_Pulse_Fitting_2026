@@ -402,15 +402,17 @@ std::vector<double> WindowedPulseProcessor::build_carry_expected(const std::vect
     }
 
     double window_start_us = histogram.bin_edges_us.front();
-    double template_support_us = static_cast<double>(pulse_template_.pmf().size()) * pulse_template_.native_bin_width_us();
 
     for (const PulseCandidate& pulse : carry_pulses) {
-        double template_start_us = pulse.time_us;
-        double template_end_us = template_start_us + template_support_us;
-        if (template_end_us <= window_start_us - 20.0) {
-            continue;
-        }
+        if (pulse.time_us >= window_start_us) continue;
+
         std::vector<double> component = pulse_template_.shifted_to_histogram(pulse.time_us, histogram.bin_edges_us);
+        if (component.size() != carry.size()) continue;
+
+        double mass = 0.0;
+        for (double x : component) mass += x;
+        if (mass <= 1.0-12) continue;
+        
         for (std::size_t i = 0; i < carry.size(); ++i) {
             carry[i] += pulse.amplitude_pe * component[i];
         }
@@ -486,8 +488,8 @@ void WindowedPulseProcessor::fit_stream(
             uses_fine_bins = true;
         }
 
-        // std::vector<double> fixed_expected = build_carry_expected(carry_pulses, histogram);
-        std::vector<double> fixed_expected(histogram.counts.size(), 0.0);
+        std::vector<double> fixed_expected = build_carry_expected(carry_pulses, histogram);
+        // std::vector<double> fixed_expected(histogram.counts.size(), 0.0);
         std::vector<double> seeds = find_coincidence_seeds(
             hits, start_time_us, end_time_us, bin_width_us, region_settings
         );
@@ -543,7 +545,7 @@ void WindowedPulseProcessor::fit_stream(
             gap_bg = estimate_local_bg_before_window(
                 hits,
                 start_time_us,
-                hits.empty() ? start_time_us : hits.front().time_us,
+                last_model_end_time_us,
                 region_settings.local_bg_lookback_us,
                 region_settings.local_bg_min_us,
                 region_settings.local_bg_guard_us
