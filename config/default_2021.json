@@ -124,7 +124,7 @@
 
   "coincidence_settings": {
     "coincidence_window_us": 0.1,
-    "telescoping_window_us": 200.0,
+    "telescoping_window_us": 1.0,
     "pe_threshold": 10,
     "apply_pileup_correction": true,
     "threshold_on_pileup_corrected": false,
