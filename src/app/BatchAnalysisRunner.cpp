@@ -162,7 +162,9 @@ void write_window_header(std::ofstream& out) {
            "fitted_pe_sum,fit_expected_sum,fixed_expected_sum,"
            "background_expected_sum,"
            "template_mass_in_window,pe_per_observed_count,"
-           "background_fraction,fit_fraction\n";
+           "background_fraction,fit_fraction,"
+           "local_background_rate_hz,local_background_gap_us,"
+           "local_background_gap_hits,local_background_updated\n";
 }
 
 void write_tail_pulse_header(std::ofstream& out) {
@@ -291,7 +293,11 @@ void append_window_rows(std::ofstream& out,
             << w.template_mass_in_window << ','
             << w.pe_per_observed_count << ','
             << w.background_fraction << ','
-            << w.fit_fraction << '\n';
+            << w.fit_fraction << ','
+            << w.local_background_rate_hz << ','
+            << w.local_background_gap_us << ','
+            << w.local_background_gap_hits << ','
+            << (w.local_background_updated ? 1 : 0) << '\n';
     }
 }
 

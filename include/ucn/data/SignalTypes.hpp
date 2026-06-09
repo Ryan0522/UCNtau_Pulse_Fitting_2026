@@ -33,6 +33,11 @@ struct WindowSummary {
     double pe_per_observed_count = 0.0;
     double background_fraction = 0.0;
     double fit_fraction = 0.0;
+
+    double local_background_rate_hz = 0.0;
+    double local_background_gap_us = 0.0;
+    int local_background_gap_hits = 0;
+    bool local_background_updated = false;
 };
 
 struct TaggedPulse {
@@ -71,6 +76,13 @@ struct RegionSettings {
     int background_iterations = 10;
     double background_tolerance_fraction = 1.0e-2;
     bool enable_background_fit = true;
+
+    bool enable_local_background = false;
+    double local_bg_lookback_us = 5000.0; // 5 ms
+    double local_bg_min_us = 1000.0; // 1 ms
+    double local_bg_guard_us = 10.0;
+    double local_bg_alpha = 0.5; // update speed
+    double local_bg_max_scale = 10.0;
 };
 
 struct RegionResult {

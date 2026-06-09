@@ -61,6 +61,7 @@ private:
                     const RegionSettings& region_settings,
                     const FitSettings& fit_settings,
                     double background_rate_hz,
+                    double stream_start_us,
                     std::vector<TaggedPulse>& output_pulses,
                     std::vector<WindowSummary>& output_summaries,
                     const std::vector<debug::TruthPulse>* truth_pulses,

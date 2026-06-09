@@ -10,6 +10,52 @@
 namespace ucn {
 namespace {
 
+struct LocalBgEstimate {
+    double rate_hz = 0.0;
+    double gap_us = 0.0;
+    int hits = 0;
+    bool valid = false;
+};
+
+LocalBgEstimate estimate_local_bg_before_window(
+    const std::vector<ucn::Hit>& hits,
+    double window_start_us, double clean_gap_lower_bound_us,
+    double lookback_us, double min_gap_us, double guard_us
+) {
+    LocalBgEstimate out;
+    
+    const double safe_guard_us = std::max(0.0, guard_us);
+    const double gap_end_us = window_start_us - safe_guard_us;
+    const double gap_start_us = std::max(
+        clean_gap_lower_bound_us,
+        gap_end_us - std::max(0.0, lookback_us)
+    );
+    const double gap_us = gap_end_us - gap_start_us;
+    if (gap_end_us <= gap_start_us || gap_us < min_gap_us) return out;
+
+    auto first = std::lower_bound(
+        hits.begin(),
+        hits.end(),
+        gap_start_us,
+        [](const ucn::Hit& h, double t) {
+            return h.time_us < t;
+        }
+    );
+
+    int n_hits = 0;
+
+    for (auto it = first; it != hits.end() && it->time_us < gap_end_us; ++it) {
+        ++n_hits;
+    }
+
+    out.gap_us = gap_us;
+    out.hits = n_hits;
+    out.rate_hz = static_cast<double>(n_hits) / (gap_us * 1.0e-6);
+    out.valid = true;
+
+    return out;
+}
+
 double sum_vector(const std::vector<double>& xs) {
     return std::accumulate(xs.begin(), xs.end(), 0.0);
 }
@@ -356,15 +402,17 @@ std::vector<double> WindowedPulseProcessor::build_carry_expected(const std::vect
     }
 
     double window_start_us = histogram.bin_edges_us.front();
-    double template_support_us = static_cast<double>(pulse_template_.pmf().size()) * pulse_template_.native_bin_width_us();
 
     for (const PulseCandidate& pulse : carry_pulses) {
-        double template_start_us = pulse.time_us;
-        double template_end_us = template_start_us + template_support_us;
-        if (template_end_us <= window_start_us - 20.0) {
-            continue;
-        }
+        if (pulse.time_us >= window_start_us) continue;
+
         std::vector<double> component = pulse_template_.shifted_to_histogram(pulse.time_us, histogram.bin_edges_us);
+        if (component.size() != carry.size()) continue;
+
+        double mass = 0.0;
+        for (double x : component) mass += x;
+        if (mass <= 1.0-12) continue;
+        
         for (std::size_t i = 0; i < carry.size(); ++i) {
             carry[i] += pulse.amplitude_pe * component[i];
         }
@@ -378,6 +426,7 @@ void WindowedPulseProcessor::fit_stream(
     const RegionSettings& region_settings,
     const FitSettings& fit_settings,
     double background_rate_hz,
+    double stream_start_us,
     std::vector<TaggedPulse>& output_pulses,
     std::vector<WindowSummary>& output_summaries,
     const std::vector<debug::TruthPulse>* truth_pulses,
@@ -390,6 +439,8 @@ void WindowedPulseProcessor::fit_stream(
 
     int i = 0;
     int window_index = 0;
+    double running_background_rate_hz = background_rate_hz;
+    double last_model_end_time_us = stream_start_us;
     
     while (i < static_cast<int>(hits.size())) {
 
@@ -437,13 +488,14 @@ void WindowedPulseProcessor::fit_stream(
             uses_fine_bins = true;
         }
 
-        // std::vector<double> fixed_expected = build_carry_expected(carry_pulses, histogram);
-        std::vector<double> fixed_expected(histogram.counts.size(), 0.0);
+        std::vector<double> fixed_expected = build_carry_expected(carry_pulses, histogram);
+        // std::vector<double> fixed_expected(histogram.counts.size(), 0.0);
         std::vector<double> seeds = find_coincidence_seeds(
             hits, start_time_us, end_time_us, bin_width_us, region_settings
         );
         
         if (seeds.empty()) {
+            last_model_end_time_us = std::max(last_model_end_time_us, model_end_time_us);
             i = next_index;
             ++window_index;
             continue;
@@ -486,8 +538,36 @@ void WindowedPulseProcessor::fit_stream(
             }
         }
 
+        double window_background_rate_hz = background_rate_hz;
+        LocalBgEstimate gap_bg;
+
+        if (region_settings.enable_local_background && region_name == "signal") {
+            gap_bg = estimate_local_bg_before_window(
+                hits,
+                start_time_us,
+                last_model_end_time_us,
+                region_settings.local_bg_lookback_us,
+                region_settings.local_bg_min_us,
+                region_settings.local_bg_guard_us
+            );
+
+            if (gap_bg.valid) {
+                const double max_rate_hz = region_settings.local_bg_max_scale * std::max(1.0, background_rate_hz);
+                double measured_rate_hz = std::min(gap_bg.rate_hz, max_rate_hz);
+                const double alpha = std::clamp(
+                    region_settings.local_bg_alpha,
+                    0.0,
+                    1.0
+                );
+                running_background_rate_hz =
+                    (1.0 - alpha) * running_background_rate_hz
+                    + alpha * measured_rate_hz;
+            }
+            window_background_rate_hz = running_background_rate_hz;
+        }
+
         FitSettings window_fit_settings = fit_settings;
-        window_fit_settings.background_per_bin = background_rate_hz * bin_width_us * 1.0e-6;
+        window_fit_settings.background_per_bin = window_background_rate_hz * bin_width_us * 1.0e-6;
         window_fit_settings.fixed_expected = fixed_expected;
 
         FitResult fit = fitter_.fit(
@@ -495,6 +575,7 @@ void WindowedPulseProcessor::fit_stream(
         );
 
         if (fit.pulses.empty()) {
+            last_model_end_time_us = std::max(last_model_end_time_us, model_end_time_us);
             i = next_index;
             ++window_index;
             continue;
@@ -616,7 +697,12 @@ void WindowedPulseProcessor::fit_stream(
         summary.pe_per_observed_count = pe_per_observed_count;
         summary.background_fraction = background_fraction;
         summary.fit_fraction = fit_fraction;
+        summary.local_background_rate_hz = window_background_rate_hz;
+        summary.local_background_gap_us = gap_bg.gap_us;
+        summary.local_background_gap_hits = gap_bg.hits;
+        summary.local_background_updated = gap_bg.valid;
         output_summaries.push_back(summary);
+        last_model_end_time_us = std::max(last_model_end_time_us, model_end_time_us);
 
         double template_support_us = static_cast<double>(pulse_template_.pmf().size()) * pulse_template_.native_bin_width_us();
         std::vector<PulseCandidate> updated_carry;
@@ -706,6 +792,7 @@ RegionResult WindowedPulseProcessor::analyze(
                        region_settings,
                        fit_settings,
                        background_rate_hz,
+                       background_start_us,
                        background_pulses,
                        background_summaries,
                        nullptr, -1, 0, "background", hold_time_s);
@@ -740,6 +827,7 @@ RegionResult WindowedPulseProcessor::analyze(
                region_settings,
                fit_settings,
                background_rate_hz,
+               signal_start_us,
                result.signal_pulses,
                result.signal_window_summaries,
                truth_pulses,
@@ -752,6 +840,7 @@ RegionResult WindowedPulseProcessor::analyze(
                region_settings,
                fit_settings,
                background_rate_hz,
+               end_start_us,
                result.end_pulses,
                result.end_window_summaries,
                nullptr, -1, 0, "end", hold_time_s);

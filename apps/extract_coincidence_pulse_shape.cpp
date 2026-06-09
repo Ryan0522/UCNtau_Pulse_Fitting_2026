@@ -17,16 +17,17 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <array>
 
 namespace fs = std::filesystem;
 
 namespace {
 
 constexpr double kLastSignalSeconds = 35.0;
-constexpr double kMinCoincidenceSeparationUs = 1500.0; // 1 ms
+constexpr double kMinCoincidenceSeparationUs = 1000.0; // 1 ms
 constexpr double kPeBinWidth = 1.0;
 
-using SumKey = std::tuple<std::string, std::string, int>; // segment, region, pe_bin
+using SumKey = std::tuple<int, std::string, std::string, int>; // segment, region, pe_bin
 
 struct SumRow {
     long long n_events = 0;
@@ -210,7 +211,7 @@ void write_event_header(std::ofstream& out) {
 }
 
 void write_sum_header(std::ofstream& out, int n_bins) {
-    out << "segment,region,pe_bin,pe_low,pe_high,"
+    out << "hold_time_s,segment,region,pe_bin,pe_low,pe_high,"
            "n_events,n_raw_hits,amp_sum,amp_mean";
 
     const char old_fill = out.fill();
@@ -229,9 +230,10 @@ void write_sums(std::ofstream& out,
         const auto& key = kv.first;
         const SumRow& row = kv.second;
 
-        const std::string& segment = std::get<0>(key);
-        const std::string& region = std::get<1>(key);
-        const int pe_bin = std::get<2>(key);
+        const int hold_time_s = std::get<0>(key);
+        const std::string& segment = std::get<1>(key);
+        const std::string& region = std::get<2>(key);
+        const int pe_bin = std::get<3>(key);
 
         double pe_low = -1.0;
         double pe_high = -1.0;
@@ -243,7 +245,8 @@ void write_sums(std::ofstream& out,
         const double amp_mean =
             row.n_events > 0 ? row.amp_sum / static_cast<double>(row.n_events) : 0.0;
 
-        out << segment << ','
+        out << hold_time_s << ','
+            << segment << ','
             << region << ','
             << pe_bin << ','
             << pe_low << ','
@@ -266,6 +269,7 @@ void write_sums(std::ofstream& out,
 }
 
 void accumulate_into_key(SumMap& sums,
+                         int hold_time_s,
                          const std::string& segment,
                          const std::string& region,
                          int pe_bin,
@@ -273,7 +277,7 @@ void accumulate_into_key(SumMap& sums,
                          int n_raw_hits_this_event,
                          int n_pe,
                          const std::vector<int>& local_counts) {
-    SumKey key{segment, region, pe_bin};
+    SumKey key{hold_time_s, segment, region, pe_bin};
     SumRow& row = sums[key];
 
     if (row.counts.empty()) {
@@ -335,11 +339,13 @@ void accumulate_coincidence_waveform(std::ofstream& event_out,
     const int pe_bin = static_cast<int>(std::floor(static_cast<double>(ev.n_pe) / kPeBinWidth));
     if (pe_bin < 0) return;
 
+    const int hold_time_bin_s = static_cast<int>(std::llround(hold_time_s));
     const std::string region = "signal_last35s";
 
     // PE-binned average, similar to existing tail sums.
     accumulate_into_key(
         sums,
+        hold_time_bin_s,
         segment,
         region,
         pe_bin,
@@ -352,6 +358,7 @@ void accumulate_coincidence_waveform(std::ofstream& event_out,
     // Also write an all-PE average per segment.
     accumulate_into_key(
         sums,
+        hold_time_bin_s,
         segment,
         region,
         -1,
@@ -411,7 +418,7 @@ int main(int argc, char** argv) {
 
         const fs::path out_dir = make_output_dir(cfg, optional_out_dir);
         const fs::path event_path = out_dir / "coinc_pulse_shape_events.csv";
-        const fs::path sum_path = out_dir / "coinc_pulse_shape_sums_by_pe.csv";
+        const fs::path sum_path = out_dir / "coinc_pulse_shape_sums_by_hold_and_pe.csv";
         const fs::path meta_path = out_dir / "coinc_pulse_shape_metadata.json";
 
         std::ofstream event_out(event_path);
