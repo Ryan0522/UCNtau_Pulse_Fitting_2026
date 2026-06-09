@@ -210,6 +210,25 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.template_config.empirical_csv_path = get_or<std::string>(
             t, "empirical_csv_path", cfg.template_config.empirical_csv_path
         );
+        
+        if (t.contains("empirical_csv_by_hold_s")) {
+            const json& m = t.at("empirical_csv_by_hold_s");
+            if (!m.is_object()) {
+                throw std::runtime_error("template_config.empirical_csv_by_hold_s must be a JSON object.");
+            }
+
+            cfg.template_config.empirical_csv_by_hold_s.clear();
+
+            for (auto it = m.begin(); it != m.end(); ++it) {
+                const int hold_s = std::stoi(it.key());
+                if (!it.value().is_string()) {
+                    throw std::runtime_error("Each empirical_csv_by_hold_s value must be a string path.");
+                }
+                cfg.template_config.empirical_csv_by_hold_s[hold_s] =
+                    it.value().get<std::string>();
+            }
+        }
+
         cfg.template_config.empirical_pretrigger_us = get_or<double>(
             t, "empirical_pretrigger_us", cfg.template_config.empirical_pretrigger_us
         );

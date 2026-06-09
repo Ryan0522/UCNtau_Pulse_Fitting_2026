@@ -443,6 +443,87 @@ void accumulate_tail_waveforms(std::ofstream& tail_pulses_out,
 
 } // namespace
 
+std::string empirical_csv_for_hold(const io::AnalysisConfig& cfg,
+                                   double hold_time_s) {
+    if (cfg.template_config.empirical_csv_by_hold_s.empty()) {
+        return cfg.template_config.empirical_csv_path;
+    }
+
+    const int hold_key = static_cast<int>(std::llround(hold_time_s));
+    const auto it = cfg.template_config.empirical_csv_by_hold_s.find(hold_key);
+
+    if (it != cfg.template_config.empirical_csv_by_hold_s.end()) {
+        return it->second;
+    }
+
+    if (!cfg.template_config.empirical_csv_path.empty()) {
+        std::cerr << "[TEMPLATE] No hold-specific empirical template for hold_time_s="
+                  << hold_time_s
+                  << " rounded_key=" << hold_key
+                  << "; falling back to empirical_csv_path="
+                  << cfg.template_config.empirical_csv_path
+                  << "\n";
+        return cfg.template_config.empirical_csv_path;
+    }
+
+    throw std::runtime_error(
+        "No empirical template found for hold_time_s=" + std::to_string(hold_time_s)
+    );
+}
+
+std::unique_ptr<PulseTemplate> make_pulse_template_for_path(
+    const io::PulseTemplateConfig& t,
+    const std::string& empirical_csv_path
+) {
+    if (t.type == "empirical") {
+        return std::make_unique<EmpiricalPulseTemplate>(
+            t.native_bin_width_us,
+            t.support_end_us,
+            empirical_csv_path,
+            t.empirical_pretrigger_us
+        );
+    }
+
+    return std::make_unique<GaussianQuadPulseTemplate>(
+        t.native_bin_width_us,
+        t.support_end_us,
+        t.use_smooth_tail_onset,
+        t.baseline,
+        t.gauss_amp,
+        t.gauss_mu,
+        t.gauss_sigma,
+        t.tail_start_us,
+        t.tail_width_us,
+        t.a1, t.tau1,
+        t.a2, t.tau2,
+        t.a3, t.tau3,
+        t.a4, t.tau4
+    );
+}
+
+void print_template_summary(const PulseTemplate& pulse_template,
+                            const io::AnalysisConfig& cfg,
+                            double hold_time_s,
+                            const std::string& empirical_csv_path) {
+    const auto pmf = pulse_template.pmf();
+    const auto it = std::max_element(pmf.begin(), pmf.end());
+    const auto idx = std::distance(pmf.begin(), it);
+    const double sum = std::accumulate(pmf.begin(), pmf.end(), 0.0);
+
+    std::cout << "[TEMPLATE]"
+              << " hold_time_s=" << hold_time_s
+              << " type=" << cfg.template_config.type
+              << " path=" << empirical_csv_path
+              << " n_bins=" << pmf.size()
+              << " bin_width_us=" << pulse_template.native_bin_width_us()
+              << " peak_local_time_us="
+              << (static_cast<double>(idx) + 0.5) * pulse_template.native_bin_width_us()
+              << " empirical_pretrigger_us="
+              << cfg.template_config.empirical_pretrigger_us
+              << " sum=" << sum
+              << "\n";
+}
+
 BatchAnalysisRunner::BatchAnalysisRunner(const io::AnalysisConfig& cfg_)
     : cfg_(cfg_) {}
 
@@ -518,66 +599,7 @@ void BatchAnalysisRunner::run() const {
     write_summary_header(summary_out);
     write_pulse_header(pulses_out);
     write_window_header(windows_out);
-    write_coincidence_header(coincidences_out);
-
-    std::unique_ptr<ucn::PulseTemplate> pulse_template;
-    if (cfg_.template_config.type == "empirical") {
-        pulse_template = std::make_unique<ucn::EmpiricalPulseTemplate>(
-            cfg_.template_config.native_bin_width_us,
-            cfg_.template_config.support_end_us,
-            cfg_.template_config.empirical_csv_path,
-            cfg_.template_config.empirical_pretrigger_us
-        );
-    } else {
-        pulse_template = std::make_unique<ucn::GaussianQuadPulseTemplate>(
-            cfg_.template_config.native_bin_width_us,
-            cfg_.template_config.support_end_us,
-            cfg_.template_config.use_smooth_tail_onset,
-            cfg_.template_config.baseline,
-            cfg_.template_config.gauss_amp,
-            cfg_.template_config.gauss_mu,
-            cfg_.template_config.gauss_sigma,
-            cfg_.template_config.tail_start_us,
-            cfg_.template_config.tail_width_us,
-            cfg_.template_config.a1, cfg_.template_config.tau1,
-            cfg_.template_config.a2, cfg_.template_config.tau2,
-            cfg_.template_config.a3, cfg_.template_config.tau3,
-            cfg_.template_config.a4, cfg_.template_config.tau4
-        );
-    }
-
-    const auto pmf = pulse_template->pmf();
-    const auto it = std::max_element(pmf.begin(), pmf.end());
-    const auto idx = std::distance(pmf.begin(), it);
-    const double sum = std::accumulate(pmf.begin(), pmf.end(), 0.0);
-
-    std::cout << "[TEMPLATE]"
-              << " type=" << cfg_.template_config.type
-              << " n_bins=" << pmf.size()
-              << " bin_width_us=" << pulse_template->native_bin_width_us()
-              << " peak_local_time_us="
-              << (static_cast<double>(idx) + 0.5) * pulse_template->native_bin_width_us()
-              << " empirical_pretrigger_us="
-              << cfg_.template_config.empirical_pretrigger_us
-              << " sum=" << sum
-              << "\n";
-
-    GreedyLRTFitter fitter(*pulse_template);
-    WindowedPulseProcessor processor(*pulse_template, fitter);
-    
-    std::shared_ptr<debug::DebugCsvWriter> debug_writer;
-
-    if (cfg_.debug_max_windows > 0 && cfg_.shard_index == 0) {
-        const fs::path debug_dir = out_dir / "debug";
-
-        debug_writer = std::make_shared<debug::DebugCsvWriter>(
-            debug_dir,
-            cfg_.debug_max_windows,
-            *pulse_template
-        );
-
-        processor.set_debug_writer(debug_writer);
-    }
+    write_coincidence_header(coincidences_out);    
     
     CoincidenceFitter coincidence_fitter(cfg_.coincidence_settings);
 
@@ -605,6 +627,25 @@ void BatchAnalysisRunner::run() const {
                       << " loaded. Segments = " << loaded.segments.size()
                       << ", hold_time_s = " << hold_time_s
                       << '\n';
+
+                        const std::string empirical_csv_path =
+                empirical_csv_for_hold(cfg_, hold_time_s);
+
+            std::unique_ptr<PulseTemplate> pulse_template =
+                make_pulse_template_for_path(
+                    cfg_.template_config,
+                    empirical_csv_path
+                );
+
+            print_template_summary(
+                *pulse_template,
+                cfg_,
+                hold_time_s,
+                empirical_csv_path
+            );
+
+            GreedyLRTFitter fitter(*pulse_template);
+            WindowedPulseProcessor processor(*pulse_template, fitter);
 
             for (const io::LoadedSegment& seg : loaded.segments) {
                 if (seg.hits.empty()) {
