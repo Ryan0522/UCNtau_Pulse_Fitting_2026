@@ -55,7 +55,7 @@ private:
                                                const RegionSettings& region_settings) const;
 
     std::vector<double> build_carry_expected(const std::vector<PulseCandidate>& carry_pulses,
-                                             const Histogram& histogram) const;
+                                             const Histogram& histogram, double pe_gain) const;
 
     void fit_stream(const std::vector<Hit>& hits,
                     const RegionSettings& region_settings,

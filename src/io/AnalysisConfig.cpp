@@ -48,6 +48,17 @@ void validate_fit_settings(const FitSettings& s) {
     if (s.max_prune_passes < 0) {
         throw std::runtime_error("fit_settings.max_prune_passes must be nonnegative.");
     }
+    if (s.pe_gain <= 0.0) {
+        throw std::runtime_error("fit_settings.pe_gain must be positive.");
+    }
+    if (s.pe_gain_default <= 0.0) {
+        throw std::runtime_error("fit_settings.pe_gain_default must be positive.");
+    }
+    for (const auto& kv : s.pe_gain_by_hold_s) {
+        if (kv.second <= 0.0) {
+            throw std::runtime_error("fit_settings.pe_gain_by_hold_s values must be positive.");
+        }
+    }
 }
 
 template <typename T>
@@ -363,6 +374,25 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.fit_settings.max_amplitude_pe =
             get_or(f, "max_amplitude_pe",
                     cfg.fit_settings.max_amplitude_pe);
+
+        cfg.fit_settings.pe_gain_default =
+            get_or(f, "pe_gain_default",
+                   cfg.fit_settings.pe_gain_default);
+
+        if (f.contains("pe_gain_by_hold_s")) {
+            cfg.fit_settings.pe_gain_by_hold_s.clear();
+
+            const auto& gains = f.at("pe_gain_by_hold_s");
+            if (!gains.is_object()) {
+                throw std::runtime_error("fit_settings.pe_gain_by_hold_s must be a JSON object.");
+            }
+
+            for (auto it = gains.begin(); it != gains.end(); ++it) {
+                const int hold_s = std::stoi(it.key());
+                const double gain = it.value().get<double>();
+                cfg.fit_settings.pe_gain_by_hold_s[hold_s] = gain;
+            }
+        }
 
         cfg.fit_settings.max_refit_steps =
             get_or(f, "max_refit_steps",

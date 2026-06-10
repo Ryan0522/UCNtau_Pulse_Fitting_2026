@@ -18,7 +18,7 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "hold_template_emp_min500_10nll_pad10_500_1PE_bg_fe_prune_refit_epoch1",
+  "array_output_subdir": "g1t_g20_108",
   "shard_index": 0,
   "num_shards": 1,
 
@@ -27,14 +27,15 @@
   "enable_coincidence_output": true,
 
   "require_tems_tree": true,
+
   "root_channel_map": {
     "tmcs_0": {
       "12": [1, 2]
     }
   },
+
   "segment_order": ["12"],
 
-  
   "template_config": {
     "type": "empirical",
     "empirical_csv_path": "./config/empirical_pulse_template_fast_10pe.csv",
@@ -120,8 +121,17 @@
     "discovery_delta_nll_cut": 10.0,
     "local_template_mass_floor": 0.001,
 
-    "min_amplitude_pe": 1.0,
+    "min_amplitude_pe": 5.0,
     "max_amplitude_pe": 400.0,
+
+    "pe_gain_default": 1.0,
+    "pe_gain_by_hold_s": {
+      "20": 1.00,
+      "50": 1.00,
+      "100": 1.00,
+      "200": 1.00,
+      "1550": 1.00
+    },
 
     "max_refit_steps": 50,
     "refit_tolerance": 1e-8,

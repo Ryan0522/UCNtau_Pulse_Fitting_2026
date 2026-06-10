@@ -178,6 +178,17 @@ double nearest_fit_neighbor_dt_us(const std::vector<PulseCandidate>& pulses, std
     return std::isfinite(best) ? best : -1.0;
 }
 
+double pe_gain_for_hold(const FitSettings& settings, double hold_time_s) {
+    const int hold_key = static_cast<int>(std::llround(hold_time_s));
+
+    auto it = settings.pe_gain_by_hold_s.find(hold_key);
+    if (it != settings.pe_gain_by_hold_s.end()) {
+        return it->second;
+    }
+
+    return settings.pe_gain_default;
+}
+
 } // namespace
 
 WindowedPulseProcessor::WindowedPulseProcessor(const PulseTemplate& pulse_template,
@@ -395,7 +406,7 @@ std::vector<double> WindowedPulseProcessor::find_coincidence_seeds(const std::ve
 }
 
 std::vector<double> WindowedPulseProcessor::build_carry_expected(const std::vector<PulseCandidate>& carry_pulses,
-                                                                 const Histogram& histogram) const {
+                                                                 const Histogram& histogram, double pe_gain) const {
     std::vector<double> carry(histogram.counts.size(), 0.0);
     if (histogram.bin_edges_us.size() < 2) {
         return carry;
@@ -414,7 +425,7 @@ std::vector<double> WindowedPulseProcessor::build_carry_expected(const std::vect
         if (mass <= 1.0-12) continue;
         
         for (std::size_t i = 0; i < carry.size(); ++i) {
-            carry[i] += pulse.amplitude_pe * component[i];
+            carry[i] += pe_gain * pulse.amplitude_pe * component[i];
         }
     }
 
@@ -443,6 +454,7 @@ void WindowedPulseProcessor::fit_stream(
     double last_model_end_time_us = stream_start_us;
     
     while (i < static_cast<int>(hits.size())) {
+        const double pe_gain = pe_gain_for_hold(fit_settings, hold_time_s);
 
         Histogram coarse_histogram;
         double start_time_us = 0.0;
@@ -488,7 +500,7 @@ void WindowedPulseProcessor::fit_stream(
             uses_fine_bins = true;
         }
 
-        std::vector<double> fixed_expected = build_carry_expected(carry_pulses, histogram);
+        std::vector<double> fixed_expected = build_carry_expected(carry_pulses, histogram, pe_gain);
         // std::vector<double> fixed_expected(histogram.counts.size(), 0.0);
         std::vector<double> seeds = find_coincidence_seeds(
             hits, start_time_us, end_time_us, bin_width_us, region_settings
@@ -569,6 +581,7 @@ void WindowedPulseProcessor::fit_stream(
         FitSettings window_fit_settings = fit_settings;
         window_fit_settings.background_per_bin = window_background_rate_hz * bin_width_us * 1.0e-6;
         window_fit_settings.fixed_expected = fixed_expected;
+        window_fit_settings.pe_gain = pe_gain;
 
         FitResult fit = fitter_.fit(
             histogram, seeds, window_fit_settings, sink_for_fit, prefit_case_id
@@ -666,14 +679,16 @@ void WindowedPulseProcessor::fit_stream(
         double observed_count = std::accumulate(histogram.counts.begin(), histogram.counts.end(), 0.0);
 
         double fitted_pe_sum = 0.0;
+        double fitted_pe_sum_raw = 0.0;
         for (const auto& p : fit.pulses) {
             fitted_pe_sum += p.amplitude_pe;
+            fitted_pe_sum_raw += pe_gain * p.amplitude_pe;
         }
         const double fit_expected_sum = sum_vector(fit.expected_total);
         const double fixed_expected_sum = sum_vector(window_fit_settings.fixed_expected);
         const double background_expected_sum = window_fit_settings.background_per_bin * static_cast<double>(histogram.counts.size());
 
-        const double template_mass_in_window = fitted_pe_sum > 0.0 ? fit_expected_sum / fitted_pe_sum : 0.0;
+        const double template_mass_in_window = fitted_pe_sum_raw > 0.0 ? fit_expected_sum / fitted_pe_sum_raw : 0.0;
         const double pe_per_observed_count = observed_count > 0 ? fitted_pe_sum / static_cast<double>(observed_count) : 0.0;
         const double background_fraction = observed_count > 0 ? background_expected_sum / static_cast<double>(observed_count) : 0.0;
         const double fit_fraction = observed_count > 0 ? fit_expected_sum / static_cast<double>(observed_count) : 0.0;
@@ -690,6 +705,8 @@ void WindowedPulseProcessor::fit_stream(
         summary.expected_count = expected_sum;
         summary.final_nll = -compute_log_likelihood(histogram.counts, full_expected);
         summary.fitted_pe_sum = fitted_pe_sum;
+        summary.fitted_pe_sum_raw = fitted_pe_sum_raw;
+        summary.pe_gain = pe_gain;
         summary.fit_expected_sum = fit_expected_sum;
         summary.fixed_expected_sum = fixed_expected_sum;
         summary.background_expected_sum = background_expected_sum;
@@ -728,6 +745,8 @@ void WindowedPulseProcessor::fit_stream(
             TaggedPulse tagged;
             tagged.time_us = pulse.time_us;
             tagged.amplitude_pe = pulse.amplitude_pe;
+            tagged.amplitude_pe_raw = pe_gain * pulse.amplitude_pe;
+            tagged.pe_gain = pe_gain;
             tagged.window_index = window_index;
             tagged.width_us = end_time_us - start_time_us;
 
@@ -799,7 +818,7 @@ RegionResult WindowedPulseProcessor::analyze(
 
             double fitted_pe_sum = 0.0;
             for (const TaggedPulse& pulse : background_pulses) {
-                fitted_pe_sum += pulse.amplitude_pe;
+                fitted_pe_sum += pulse.amplitude_pe_raw;
             }
 
             const double duration_s = background_duration_us * 1.0e-6;

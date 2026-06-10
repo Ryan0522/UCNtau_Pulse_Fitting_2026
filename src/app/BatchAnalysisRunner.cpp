@@ -140,7 +140,7 @@ void write_summary_header(std::ofstream& out) {
 
 void write_pulse_header(std::ofstream& out) {
     out << "run,segment,hold_time_s,region,time_us,amplitude_pe,"
-           "window_index,width_us,"
+           "amplitude_pe_raw,pe_gain,window_index,width_us,"
            "fit_topology,seed_count_in_window,fit_pulse_count_in_window,"
            "pulse_rank_in_window,nearest_fit_dt_us,"
            "is_multi_seed_window,is_multi_fit_window,"
@@ -159,7 +159,8 @@ void write_window_header(std::ofstream& out) {
     out << "run,segment,hold_time_s,region,window_index,"
            "start_time_us,end_time_us,width_us,bin_width_us,"
            "pulse_count,seed_count,observed_count,expected_count,final_nll,"
-           "fitted_pe_sum,fit_expected_sum,fixed_expected_sum,"
+           "fitted_pe_sum,fitted_pe_sum_raw,pe_gain,"
+           "fit_expected_sum,fixed_expected_sum,"
            "background_expected_sum,"
            "template_mass_in_window,pe_per_observed_count,"
            "background_fraction,fit_fraction,"
@@ -250,6 +251,8 @@ void append_tagged_pulses(std::ofstream& out,
             << region_name << ','
             << p.time_us << ','
             << p.amplitude_pe << ','
+            << p.amplitude_pe_raw << ','
+            << p.pe_gain << ','
             << p.window_index << ','
             << p.width_us << ','
             << p.fit_topology << ','
@@ -287,6 +290,8 @@ void append_window_rows(std::ofstream& out,
             << w.expected_count << ','
             << w.final_nll << ','
             << w.fitted_pe_sum << ','
+            << w.fitted_pe_sum_raw << ','
+            << w.pe_gain << ','
             << w.fit_expected_sum << ','
             << w.fixed_expected_sum << ','
             << w.background_expected_sum << ','
