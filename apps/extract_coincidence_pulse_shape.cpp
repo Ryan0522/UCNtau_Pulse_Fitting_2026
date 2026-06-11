@@ -411,7 +411,7 @@ int main(int argc, char** argv) {
         const ucn::io::AnalysisConfig cfg = ucn::io::load_analysis_config(config_path);
 
         double bin_width_us = 0.5;
-        double window_us = 1000.0;
+        double window_us = 5000.0;
         double pretrigger_us = 10.0;
 
         const int n_bins = static_cast<int>(std::ceil(window_us / bin_width_us));

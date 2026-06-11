@@ -12,48 +12,85 @@ namespace {
 
 struct LocalBgEstimate {
     double rate_hz = 0.0;
-    double gap_us = 0.0;
-    int hits = 0;
+    double free_pe_interval_us = 0.0;
+    int n_free = 0;
     bool valid = false;
 };
 
-LocalBgEstimate estimate_local_bg_before_window(
-    const std::vector<ucn::Hit>& hits,
-    double window_start_us, double clean_gap_lower_bound_us,
-    double lookback_us, double min_gap_us, double guard_us
-) {
-    LocalBgEstimate out;
-    
-    const double safe_guard_us = std::max(0.0, guard_us);
-    const double gap_end_us = window_start_us - safe_guard_us;
-    const double gap_start_us = std::max(
-        clean_gap_lower_bound_us,
-        gap_end_us - std::max(0.0, lookback_us)
-    );
-    const double gap_us = gap_end_us - gap_start_us;
-    if (gap_end_us <= gap_start_us || gap_us < min_gap_us) return out;
+struct RunningFreePeBg {
+    double last_free_time_us = 0.0;
+    double free_pe_interval_us = 0.0;
+    std::size_t n_free = 0;
+    double fallback_rate_hz = 0.0;
+    explicit RunningFreePeBg(double initial_rate_hz = 0.0)
+        : fallback_rate_hz(std::max(0.0, initial_rate_hz)) {}
 
-    auto first = std::lower_bound(
-        hits.begin(),
-        hits.end(),
-        gap_start_us,
-        [](const ucn::Hit& h, double t) {
-            return h.time_us < t;
+    void update(double free_time_us) {
+        if (n_free == 0) {
+            last_free_time_us = free_time_us;
+            n_free = 1;
+            return;
         }
-    );
+        const double dt_us = free_time_us - last_free_time_us;
+        last_free_time_us = free_time_us;
 
-    int n_hits = 0;
+        if (dt_us <= 0.0) {
+            ++n_free;
+            return;
+        }
 
-    for (auto it = first; it != hits.end() && it->time_us < gap_end_us; ++it) {
-        ++n_hits;
+        if (n_free == 1) {
+            free_pe_interval_us = dt_us;
+        } else if (n_free < 100) {
+            const double nf = static_cast<double>(n_free);
+            free_pe_interval_us = 
+                ((nf - 1.0) / nf) * free_pe_interval_us
+                + (1.0 / nf) * dt_us;
+        } else {
+            free_pe_interval_us = 
+                0.99 * free_pe_interval_us + 0.01 * dt_us;
+        }
+        ++n_free;
     }
 
-    out.gap_us = gap_us;
-    out.hits = n_hits;
-    out.rate_hz = static_cast<double>(n_hits) / (gap_us * 1.0e-6);
-    out.valid = true;
+    bool ready() const {
+        return free_pe_interval_us > 0.0;
+    }
 
-    return out;
+    double rate_hz() const {
+        if (ready()) {
+            return 1.0e6 / free_pe_interval_us;
+        }
+        return fallback_rate_hz;
+    }
+
+    LocalBgEstimate snapshot() const {
+        LocalBgEstimate out;
+        out.rate_hz = rate_hz();
+        out.free_pe_interval_us = free_pe_interval_us;
+        out.n_free = static_cast<int>(
+            std::min<std::size_t>(
+                n_free,
+                static_cast<std::size_t>(std::numeric_limits<int>::max())
+            )
+        );
+        out.valid = ready();
+        return out;
+    }
+};
+
+void update_free_pe_bg_from_hit_range(
+    const std::vector<ucn::Hit>& hits,
+    int begin_index, int end_index,
+    RunningFreePeBg& bg
+) {
+    const int n = static_cast<int>(hits.size());
+    begin_index = std::max(0, begin_index);
+    end_index = std::min(end_index, n);
+
+    for (int k = begin_index; k < end_index; ++k) {
+        bg.update(hits[static_cast<std::size_t>(k)].time_us);
+    }
 }
 
 double sum_vector(const std::vector<double>& xs) {
@@ -422,7 +459,7 @@ std::vector<double> WindowedPulseProcessor::build_carry_expected(const std::vect
 
         double mass = 0.0;
         for (double x : component) mass += x;
-        if (mass <= 1.0-12) continue;
+        if (mass <= 1.0e-12) continue;
         
         for (std::size_t i = 0; i < carry.size(); ++i) {
             carry[i] += pe_gain * pulse.amplitude_pe * component[i];
@@ -451,6 +488,7 @@ void WindowedPulseProcessor::fit_stream(
     int i = 0;
     int window_index = 0;
     double running_background_rate_hz = background_rate_hz;
+    RunningFreePeBg free_pe_bg(background_rate_hz);
     double last_model_end_time_us = stream_start_us;
     
     while (i < static_cast<int>(hits.size())) {
@@ -507,6 +545,10 @@ void WindowedPulseProcessor::fit_stream(
         );
         
         if (seeds.empty()) {
+            if (region_settings.enable_local_background && region_name == "signal") {
+                update_free_pe_bg_from_hit_range(hits, i, next_index, free_pe_bg);
+            }
+            
             last_model_end_time_us = std::max(last_model_end_time_us, model_end_time_us);
             i = next_index;
             ++window_index;
@@ -554,27 +596,13 @@ void WindowedPulseProcessor::fit_stream(
         LocalBgEstimate gap_bg;
 
         if (region_settings.enable_local_background && region_name == "signal") {
-            gap_bg = estimate_local_bg_before_window(
-                hits,
-                start_time_us,
-                last_model_end_time_us,
-                region_settings.local_bg_lookback_us,
-                region_settings.local_bg_min_us,
-                region_settings.local_bg_guard_us
-            );
+            gap_bg = free_pe_bg.snapshot();
 
-            if (gap_bg.valid) {
-                const double max_rate_hz = region_settings.local_bg_max_scale * std::max(1.0, background_rate_hz);
-                double measured_rate_hz = std::min(gap_bg.rate_hz, max_rate_hz);
-                const double alpha = std::clamp(
-                    region_settings.local_bg_alpha,
-                    0.0,
-                    1.0
-                );
-                running_background_rate_hz =
-                    (1.0 - alpha) * running_background_rate_hz
-                    + alpha * measured_rate_hz;
-            }
+            double measured_rate_hz = gap_bg.rate_hz;
+            const double max_rate_hz = region_settings.local_bg_max_scale * std::max(1.0, background_rate_hz);
+            measured_rate_hz = std::min(measured_rate_hz, max_rate_hz);
+
+            running_background_rate_hz = measured_rate_hz;
             window_background_rate_hz = running_background_rate_hz;
         }
 
@@ -588,6 +616,10 @@ void WindowedPulseProcessor::fit_stream(
         );
 
         if (fit.pulses.empty()) {
+            if (region_settings.enable_local_background && region_name == "signal") {
+                update_free_pe_bg_from_hit_range(hits, i, next_index, free_pe_bg);
+            }
+
             last_model_end_time_us = std::max(last_model_end_time_us, model_end_time_us);
             i = next_index;
             ++window_index;
@@ -715,8 +747,8 @@ void WindowedPulseProcessor::fit_stream(
         summary.background_fraction = background_fraction;
         summary.fit_fraction = fit_fraction;
         summary.local_background_rate_hz = window_background_rate_hz;
-        summary.local_background_gap_us = gap_bg.gap_us;
-        summary.local_background_gap_hits = gap_bg.hits;
+        summary.local_background_gap_us = gap_bg.free_pe_interval_us;
+        summary.local_background_gap_hits = gap_bg.n_free;
         summary.local_background_updated = gap_bg.valid;
         output_summaries.push_back(summary);
         last_model_end_time_us = std::max(last_model_end_time_us, model_end_time_us);
