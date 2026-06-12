@@ -83,7 +83,7 @@
     "fine_bin_width_us": 0.25,
     "min_gap_us": 50.0,
     "fit_start_padding_us": 10.0,
-    "fit_end_padding_us": 50.0,
+    "fit_end_padding_us": 0.0,
     "coincidence_window_us": 0.05,
     "coincidence_min_hits": 2,
     "seed_veto_window_us": 1.0,
@@ -121,7 +121,7 @@
     "discovery_delta_nll_cut": 10.0,
     "local_template_mass_floor": 0.001,
 
-    "min_amplitude_pe": 5.0,
+    "min_amplitude_pe": 0.0,
     "max_amplitude_pe": 400.0,
 
     "pe_gain_default": 1.0,
