@@ -1,7 +1,7 @@
 {
   "year": 2021,
-  "start_run": 21599,
-  "end_run": 22401,
+  "start_run": 22402,
+  "end_run": 26021,
   "restrict_to_good_runs": true,
 
   "data_folder": "../UCNtau_2021_raw_data/",
@@ -18,7 +18,7 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "2ms_tail_bg",
+  "array_output_subdir": "2ms_tail_bg_fast2",
   "shard_index": 0,
   "num_shards": 1,
 
@@ -42,11 +42,11 @@
     "empirical_pretrigger_us": 10.0,
 
     "empirical_csv_by_hold_s": {
-      "20":   "./config/hold_templates/hold_20_2ms.csv",
-      "50":   "./config/hold_templates/hold_50_2ms.csv",
-      "100":  "./config/hold_templates/hold_100_2ms.csv",
-      "200":  "./config/hold_templates/hold_200_2ms.csv",
-      "1550": "./config/hold_templates/hold_1550_2ms.csv"
+      "20":   "./config/slow_hold_templates/hold_20.csv",
+      "50":   "./config/slow_hold_templates/hold_50.csv",
+      "100":  "./config/slow_hold_templates/hold_100.csv",
+      "200":  "./config/slow_hold_templates/hold_200.csv",
+      "1550": "./config/slow_hold_templates/hold_1550.csv"
     },
 
     "native_bin_width_us": 0.5,
@@ -81,7 +81,7 @@
     "fixed_seed_window_us": 500.0,
     "coarse_bin_width_us": 0.5,
     "fine_bin_width_us": 0.25,
-    "min_gap_us": 50.0,
+    "min_gap_us": 200.0,
     "fit_start_padding_us": 10.0,
     "fit_end_padding_us": 0.0,
     "coincidence_window_us": 0.05,
@@ -142,7 +142,7 @@
 
   "coincidence_settings": {
     "coincidence_window_us": 0.1,
-    "telescoping_window_us": 100.0,
+    "telescoping_window_us": 1.0,
     "pe_threshold": 10,
     "apply_pileup_correction": true,
     "threshold_on_pileup_corrected": false,
