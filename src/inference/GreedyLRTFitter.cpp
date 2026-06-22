@@ -199,13 +199,6 @@ double optimizer_cluster_local_full_amplitude(
     return local_amp / local_mass_out;
 }
 
-std::vector<double> gain_scaled_component(std::vector<double> component, double pe_gain) {
-    const double g = std::max(pe_gain, 1.0e-12);
-    for (double& x : component) x *= g;
-
-    return component;
-}
-
 } // namespace
 
 GreedyLRTFitter::GreedyLRTFitter(const PulseTemplate& pulse_template)
@@ -387,10 +380,7 @@ FitResult GreedyLRTFitter::discover_local_sequential(
                 continue;
             }
 
-            std::vector<double> component = gain_scaled_component(
-                pulse_template_.shifted_to_histogram(time_us, histogram.bin_edges_us),
-                settings.pe_gain
-            );
+            std::vector<double> component = pulse_template_.shifted_to_histogram(time_us, histogram.bin_edges_us);
             double local_mass = 0.0;
             const double amplitude = optimizer_cluster_local_full_amplitude(
                 histogram, zero_base, component, running_fixed_expected,
@@ -490,10 +480,7 @@ FitResult GreedyLRTFitter::refit_amplitudes(
 
     for (const PulseCandidate& pulse : out.pulses) {
         components.push_back(
-            gain_scaled_component(
-                pulse_template_.shifted_to_histogram(pulse.time_us, histogram.bin_edges_us),
-                settings.pe_gain
-            )
+            pulse_template_.shifted_to_histogram(pulse.time_us, histogram.bin_edges_us)
         );
         amplitudes.push_back(
             std::clamp(pulse.amplitude_pe, 0.0, settings.max_amplitude_pe)

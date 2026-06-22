@@ -1,6 +1,5 @@
 #pragma once
 #include "ucn/data/SignalTypes.hpp"
-#include <map>
 #include <vector>
 
 namespace ucn
@@ -35,11 +34,6 @@ struct FitSettings {
     // Amplitude bounds
     double min_amplitude_pe = 5.0;
     double max_amplitude_pe = 400.0;
-
-    // Post-fit PE gain correction.
-    double pe_gain = 1.0;
-    double pe_gain_default = 1.0;
-    std::map<int, double> pe_gain_by_hold_s;
 
     // Sequential local discovery
     double local_template_mass_floor = 1.0e-3;

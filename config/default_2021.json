@@ -124,15 +124,6 @@
     "min_amplitude_pe": 0.0,
     "max_amplitude_pe": 400.0,
 
-    "pe_gain_default": 1.0,
-    "pe_gain_by_hold_s": {
-      "20": 1.00,
-      "50": 1.00,
-      "100": 1.00,
-      "200": 1.00,
-      "1550": 1.00
-    },
-
     "max_refit_steps": 50,
     "refit_tolerance": 1e-8,
 

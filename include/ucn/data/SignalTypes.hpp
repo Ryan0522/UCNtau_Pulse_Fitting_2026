@@ -25,8 +25,6 @@ struct WindowSummary {
     double final_nll = 0.0;
 
     double fitted_pe_sum = 0.0;
-    double fitted_pe_sum_raw = 0.0;
-    double pe_gain = 1.0;
     double fit_expected_sum = 0.0;
     double fixed_expected_sum = 0.0;
     double background_expected_sum = 0.0;
@@ -45,8 +43,6 @@ struct WindowSummary {
 struct TaggedPulse {
     double time_us = 0.0;
     double amplitude_pe = 0.0;
-    double amplitude_pe_raw = 0.0;
-    double pe_gain = 1.0;
     
     int window_index = -1;
     double width_us = 0.0;
