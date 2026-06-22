@@ -373,55 +373,6 @@ def load_rhdd(path):
     d["RHDD"] = pd.to_numeric(d["RHDD"], errors="coerce")
     return d[["run", "RHDD"]].dropna().drop_duplicates("run")
 
-def make_threshold_counts(events, pe_name, threshold, duration_table, subtract_bg):
-    keys = ["run", "segment", "hold_time_s"]
-    d = events.copy()
-    d = d[d["region"].isin(["signal", "background"])]
-    d = d[np.isfinite(d[pe_name]) & (d[pe_name] >= threshold)]
-
-    s_counts = d[d["region"].eq("signal")].groupby(keys).size().rename("s_count")
-    b_counts = d[d["region"].eq("background")].groupby(keys).size().rename("b_count")
-
-    out = duration_table.copy()
-    out = out.merge(s_counts.reset_index(), on=keys, how="left")
-    out = out.merge(b_counts.reset_index(), on=keys, how="left")
-    out["s_count"] = out["s_count"].fillna(0.0)
-    out["b_count"] = out["b_count"].fillna(0.0)
-
-    out["bg_scale"] = out["signal_duration_s"] / out["background_duration_s"]
-    bad_bg = (~np.isfinite(out["bg_scale"])) | (out["background_duration_s"] <= 0)
-    out.loc[bad_bg, "bg_scale"] = np.nan
-
-    if subtract_bg:
-        out["net_count"] = out["s_count"] - out["bg_scale"] * out["b_count"]
-        out["var_count"] = out["s_count"] + (out["bg_scale"] ** 2) * out["b_count"]
-    else:
-        out["net_count"] = out["s_count"]
-        out["var_count"] = out["s_count"]
-
-    return out
-
-def add_deadtime(counts, k0, window_s):
-    out = counts.copy()
-    n = out["net_count"].astype(float)
-    v = out["var_count"].astype(float)
-
-    if k0 == 0:
-        out["dt_denom"] = 1.0
-        out["count_corr"] = n
-        out["var_corr"] = v
-        return out
-
-    rate = n / window_s
-    denom = 1.0 - rate * k0
-    out["dt_denom"] = denom
-    out["count_corr"] = n / denom
-    out["var_corr"] = v / denom**4
-
-    bad = (~np.isfinite(denom)) | (denom <= 0)
-    out.loc[bad, ["count_corr", "var_corr"]] = np.nan
-    return out
-
 def summarize_hold_yield(counts, rhdd):
     out = counts.merge(rhdd, on="run", how="left") if not rhdd.empty else counts.copy()
     if "RHDD" not in out.columns:
@@ -545,6 +496,51 @@ def fit_tau_all_holds(hold_summary, hold_times, threshold, stream, subtract_bg, 
         row["status"] = repr(exc)
         return row, d
 
+def compute_instantaneous_deadtime_counts(events, pe_name, threshold, duration_table, deadtime_k0, subtract_bg, bin_widht_s=5.0):
+    keys = ["run", "segment", "hold_time_s"]
+    
+    d = events.copy()
+    d = d[d["region"].isin(["signal", "background"])]
+    d = d[np.isfinite(d[pe_name]) & (d[pe_name] >= threshold)].copy()
+    
+    d["time_bin"] = np.floor(d["time_rel_s"] / bin_width_s) * bin_width_s
+    
+    binned = d.groupby(keys + ["region", "time_bin"]).size().unstack(level="region", fill_value=0).reset_index()
+    
+    if "signal" not in binned.columns: binned["signal"] = 0
+    if "background" not in binned.columns: binned["background"] = 0
+
+    binned = binned.merge(duration_table, on=keys, how="left")
+    binned["bg_scale"] = binned["signal_duration_s"] / binned["background_duration_s"]
+    
+    if subtract_bg:
+        binned["bin_net"] = binned["signal"] - binned["bg_scale"] * binned["background"]
+        binned["bin_var"] = binned["signal"] + (binned["bg_scale"] ** 2) * binned["background"]
+    else:
+        binned["bin_net"] = binned["signal"]
+        binned["var_count"] = binned["signal"]
+        
+    binned["bin_rate"] = binned["bin_net"] / bin_width_s
+    binned["denom"] = 1.0 - (binned["bin_rate"] * deadtime_k0)
+    
+    binned["corr_net"] = binned["bin_net"] / binned["denom"]
+    binned["corr_var"] = binned["bin_var"] / (binned["denom"] ** 4)
+    
+    invalid = (~np.isfinite(binned["denom"])) | (binned["denom"] <= 0)
+    binned.loc[invalid, ["corr_net", "corr_var"]] = np.nan
+    
+    aggregated = binned.groupby(keys).agg(
+        s_count=("signal", "sum"),
+        b_count=("background", "sum"),
+        net_count=("bin_net", "sum"),
+        var_count=("bin_var", "sum"),
+        count_corr=("corr_net", "sum"),
+        var_corr=("corr_var", "sum")
+    ).reset_index()
+    
+    aggregated = aggregated.merge(duration_table, on=keys, how="left")
+    return aggregated
+
 def compute_lifetime_vs_pe(events, duration_table, rhdd, thresholds, hold_times, deadtime_k0, deadtime_window_s, stream):
     if events.empty:
         return pd.DataFrame(), pd.DataFrame()
@@ -555,8 +551,10 @@ def compute_lifetime_vs_pe(events, duration_table, rhdd, thresholds, hold_times,
 
     for subtract_bg in [False, True]:
         for thr in thresholds:
-            counts = make_threshold_counts(events, col, thr, duration_table, subtract_bg=subtract_bg)
-            counts = add_deadtime(counts, k0=deadtime_k0, window_s=deadtime_window_s)
+            counts = compute_instantaneous_deadtime_counts(
+                events=events, pe_name=col, threshold=thr, 
+                duration_table=duration_table, deadtime_k0=deadtime_k0, subtract_bg=subtract_bg
+            )
             ysum = summarize_hold_yield(counts, rhdd)
             fit_row, points = fit_tau_all_holds(
                 ysum,

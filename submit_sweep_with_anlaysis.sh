@@ -5,10 +5,10 @@ set -euo pipefail
 
 BASE=${BASE:-config/default_2021.json}
 EXE=${EXE:-./build/run_batch_analysis}
-SWEEP_NAME=${SWEEP_NAME:-sweep_nll_epoch2}
+SWEEP_NAME=${SWEEP_NAME:-sweep_nll_delta}
 PARAM=${PARAM:-fit_settings.discovery_delta_nll_cut}
 LABEL=${LABEL:-nll}
-VALUES=${VALUES:-"5 10 15 20"}
+VALUES=${VALUES:-"5 10 15 20 25 30"}
 SHARDS=${SHARDS:-16}
 RDE_CSV=${RDE_CSV:-analysis/runinfo_2021_all.csv}
 OUTPUT_FOLDER=${OUTPUT_FOLDER:-output/2021}
@@ -32,15 +32,19 @@ echo "  ARRAY       = 0-$ARRAY_MAX"
 echo "  SWEEP_ROOT  = $SWEEP_ROOT"
 
 run_jobid=$(sbatch --parsable \
+  --account=chenyliu \
+  --partition=secondary \
   --array=0-${ARRAY_MAX} \
   --export=ALL,BASE="$BASE",EXE="$EXE",SWEEP_NAME="$SWEEP_NAME",PARAM="$PARAM",LABEL="$LABEL",VALUES="$VALUES",SHARDS="$SHARDS" \
-  slurm/sweep_run.slurm)
+  slurm/sweep_run.sh)
 
 echo "Submitted sweep job: $run_jobid"
 
 an_jobid=$(sbatch --parsable \
+  --account=chenyliu \
+  --partition=secondary \
   --dependency=afterok:$run_jobid \
   --export=ALL,SWEEP_ROOT="$SWEEP_ROOT",RDE_CSV="$RDE_CSV" \
-  slurm/analyze_sweep.slurm)
+  slurm/analyze_sweep.sh)
 
 echo "Submitted dependent analysis job: $an_jobid"
