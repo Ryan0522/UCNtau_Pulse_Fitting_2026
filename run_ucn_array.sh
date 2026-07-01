@@ -11,7 +11,7 @@
 #SBATCH --error=logs/ucn_%A_%a.err
 
 ROOT_CONDA_ENV="/projects/illinois/eng/physics/chenyliu/Ryan_ciyouh2/root"
-BASE_CONFIG="config/default_2021.json"
+BASE_CONFIG="config/default_2021_fast.json"
 GENERATED_CONFIG_DIR="config/generated"
 TASK_CONFIG="${GENERATED_CONFIG_DIR}/config_${SLURM_ARRAY_TASK_ID}.json"
 EXECUTABLE="./build/run_batch_analysis"

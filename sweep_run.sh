@@ -9,6 +9,15 @@
 
 set -euo pipefail
 
+ROOT_CONDA_ENV="/projects/illinois/eng/physics/chenyliu/Ryan_ciyouh2/root"
+module purge
+module load miniconda3
+module load python
+
+set +u
+source activate "${ROOT_CONDA_ENV}"
+set -u
+
 mkdir -p slurm_logs
 
 : "${BASE:?set BASE=config/default_2021.json}"

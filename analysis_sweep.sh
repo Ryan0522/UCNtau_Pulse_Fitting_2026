@@ -6,10 +6,18 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=16G
 
-set -euo pipefail
+ROOT_CONDA_ENV="/projects/illinois/eng/physics/chenyliu/Ryan_ciyouh2/root"
+module purge
+module load miniconda3
+module load python
+
+set +u
+source activate "${ROOT_CONDA_ENV}"
+set -u
 
 mkdir -p slurm_logs
 
+set -euo pipefail
 : "${SWEEP_ROOT:?set SWEEP_ROOT, e.g. output/2021/sweep_nll_epoch2}"
 
 PYTHON=${PYTHON:-python3}
@@ -18,8 +26,8 @@ RDE_CSV=${RDE_CSV:-analysis/runinfo_2021_all.csv}
 LIFETIME_MIN=${LIFETIME_MIN:-0}
 LIFETIME_MAX=${LIFETIME_MAX:-21}
 LIFETIME_STEP=${LIFETIME_STEP:-1}
-DEADTIME_K0=${DEADTIME_K0:-1e-6}
-DEADTIME_WINDOW_S=${DEADTIME_WINDOW_S:-60}
+DEADTIME_K0=${DEADTIME_K0:-3.687e-6}
+DEADTIME_WINDOW_S=${DEADTIME_WINDOW_S:-10}
 
 for value_dir in "$SWEEP_ROOT"/*; do
   [ -d "$value_dir" ] || continue

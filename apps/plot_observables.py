@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -16,6 +17,8 @@ DEFAULT_HOLD_TIMES = (20, 50, 100, 200, 1550)
 def read_csvs(root, name):
     root = Path(root)
     task_dirs = sorted(root.glob("task_*"))
+    if not task_dirs:
+        task_dirs = sorted(root.glob("*/task_*"))
     dirs = task_dirs if task_dirs else [root]
 
     dfs = []
@@ -212,7 +215,10 @@ def plot_threshold_bgsub(events, outdir, label, thresholds):
 
         y = []
         for thr in thresholds:
-            n_pass = (s[col] >= thr).sum() - scale * (b[col] >= thr).sum()
+            sig_pass = (s[col] >= thr).sum()
+            background_pass = (b[col] >= thr).sum()
+            
+            n_pass = sig_pass - scale * background_pass
             frac = n_pass / n_total if n_total > 0 else np.nan
             y.append(frac)
             rows.append({
@@ -220,7 +226,7 @@ def plot_threshold_bgsub(events, outdir, label, thresholds):
                 "hold_time_s": hold,
                 "threshold_pe": thr,
                 "signal_pass": sig_pass,
-                "background_pass": bg_pass,
+                "background_pass": background_pass,
                 "background_scale": scale,
                 "bgsub_pass": n_pass,
                 "bgsub_total": n_total,
@@ -496,7 +502,7 @@ def fit_tau_all_holds(hold_summary, hold_times, threshold, stream, subtract_bg, 
         row["status"] = repr(exc)
         return row, d
 
-def compute_instantaneous_deadtime_counts(events, pe_name, threshold, duration_table, deadtime_k0, subtract_bg, bin_widht_s=5.0):
+def compute_instantaneous_deadtime_counts(events, pe_name, threshold, duration_table, deadtime_k0, subtract_bg, bin_width_s=5.0):
     keys = ["run", "segment", "hold_time_s"]
     
     d = events.copy()
@@ -518,7 +524,7 @@ def compute_instantaneous_deadtime_counts(events, pe_name, threshold, duration_t
         binned["bin_var"] = binned["signal"] + (binned["bg_scale"] ** 2) * binned["background"]
     else:
         binned["bin_net"] = binned["signal"]
-        binned["var_count"] = binned["signal"]
+        binned["bin_var"] = binned["signal"]
         
     binned["bin_rate"] = binned["bin_net"] / bin_width_s
     binned["denom"] = 1.0 - (binned["bin_rate"] * deadtime_k0)
@@ -611,89 +617,138 @@ def plot_stream(events, outdir, label, thresholds, bin_s):
         plot_rate_vs_time(events, outdir, label, bin_s),
     ]
 
-
 def threshold_grid(min_value, max_value, step):
     return np.arange(min_value, max_value + 0.5 * step, step)
+
+def get_epoch_range(epoch_info_path, year, epoch):
+    with open(epoch_info_path) as f:
+        info = json.load(f)
+    try:
+        rec = info[str(year)][str(epoch)]
+        return int(rec["start_run_number"]), int(rec["end_run_number"])
+    except KeyError:
+        print(f"[warn] No run numbers found for year {year}, epoch {epoch}")
+        return None, None
+
+def filter_epoch(df, start_run, end_run):
+    if df.empty or "run" not in df.columns:
+        return df
+    return df[(df["run"] >= start_run) & (df["run"] <= end_run)].copy()
 
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--dir", required=True, help="Batch output directory or sweep value directory.")
     p.add_argument("--out", required=True, help="Plot/table output directory.")
+    p.add_argument("--epoch-info", default="config/epoch_info.json", help="Path to epoch_info.json")
+    p.add_argument("--year", type=int, default=2021, help="Data year for the epoch config")
+    p.add_argument("--epochs", nargs="+", type=int, default=[1, 2, 4, 5, 6], help="Epochs to process")
+    
     p.add_argument("--thresholds", nargs="+", type=float, default=[0, 5, 10, 20, 30, 40, 50])
     p.add_argument("--bin-s", type=float, default=5.0)
-
     p.add_argument("--rde-csv", default=None, help="CSV with run/Run Number and RHDD columns. Needed for notebook-style lifetime normalization.")
     p.add_argument("--lifetime-threshold-min", type=float, default=0.0)
     p.add_argument("--lifetime-threshold-max", type=float, default=21.0)
     p.add_argument("--lifetime-threshold-step", type=float, default=1.0)
     p.add_argument("--hold-times", nargs="+", type=float, default=list(DEFAULT_HOLD_TIMES))
-    p.add_argument("--deadtime-k0", type=float, default=1.0e-6, help="Notebook-style correction. Use 0 to disable.")
+    p.add_argument("--deadtime-k0", type=float, default=3.687e-6, help="Notebook-style correction. Use 0 to disable.")
     p.add_argument("--deadtime-window-s", type=float, default=60.0)
     p.add_argument("--skip-lifetime", action="store_true")
     p.add_argument("--chi2-scaled-error", action="store_true")
     args = p.parse_args()
+    print(args)
 
-    outdir = Path(args.out)
-    outdir.mkdir(parents=True, exist_ok=True)
+    raw_data = read_outputs(args.dir)
+    raw_summary = clean(raw_data["summary"])
 
-    data = read_outputs(args.dir)
-    summary = clean(data["summary"])
-    duration_table = make_duration_table(summary)
+    if raw_summary.empty:
+        print(f"[error] No run summary data found in {args.dir}. Exiting.")
+        return
 
-    pulses = add_region_time(data["pulses"], summary)
-    coinc = add_region_time(data["coinc"], summary)
-    windows = data["windows"]
+    rhdd = load_rhdd(args.rde_csv) if args.rde_csv else pd.DataFrame()
+    if rhdd.empty and not args.skip_lifetime:
+        print("[warn] --rde-csv not supplied. Lifetime will be normalized by 1 per run, not RHDD.")
 
-    all_tables = []
-    all_tables += plot_stream(pulses, outdir, "pulse", args.thresholds, args.bin_s)
-    all_tables += plot_stream(coinc, outdir, "coinc", args.thresholds, args.bin_s)
+    for epoch in args.epochs:
+        print(f"\n--- Processing Epoch {epoch} ---")
+        
+        start_run, end_run = get_epoch_range(args.epoch_info, args.year, epoch)
+        if start_run is None or end_run is None:
+            print(f"Skipping Epoch {epoch}: Configuration missing.")
+            continue
+            
+        # Filter the summary file to verify if data exists for this epoch
+        epoch_summary = filter_epoch(raw_summary, start_run, end_run)
+        if epoch_summary.empty:
+            print(f"Skipping Epoch {epoch}: No runs found in the range [{start_run}, {end_run}].")
+            continue
 
-    if not windows.empty:
-        all_tables.append(plot_windows(windows, outdir))
+        # Establish centralized output directory specific to this epoch
+        epoch_outdir = Path(args.out) / f"epoch_{epoch}"
+        epoch_outdir.mkdir(parents=True, exist_ok=True)
 
-    if not args.skip_lifetime:
-        rhdd = load_rhdd(args.rde_csv) if args.rde_csv else pd.DataFrame()
-        if rhdd.empty:
-            print("[warn] --rde-csv not supplied. Lifetime will be normalized by 1 per run, not RHDD.")
+        # Filter remaining streams
+        duration_table = make_duration_table(epoch_summary)
+        pulses = add_region_time(filter_epoch(raw_data["pulses"], start_run, end_run), epoch_summary)
+        coinc = add_region_time(filter_epoch(raw_data["coinc"], start_run, end_run), epoch_summary)
+        
+        windows = pd.DataFrame()
+        if not raw_data["windows"].empty:
+            windows = filter_epoch(clean(raw_data["windows"]), start_run, end_run)
+            if "region" in windows.columns:
+                windows = windows[windows["region"].eq("signal")]
 
-        life_thresholds = threshold_grid(
-            args.lifetime_threshold_min,
-            args.lifetime_threshold_max,
-            args.lifetime_threshold_step,
-        )
-        hold_times = tuple(args.hold_times)
+        # Skip processing entirely if there are no pulse or coincidence events
+        if pulses.empty and coinc.empty:
+            print(f"Skipping Epoch {epoch}: Filtered data tables are empty.")
+            continue
 
-        for label, events in [("pulse", pulses), ("coinc", coinc)]:
-            if events.empty:
-                continue
-            fit_df, points_df = compute_lifetime_vs_pe(
-                events=events,
-                duration_table=duration_table,
-                rhdd=rhdd,
-                thresholds=life_thresholds,
-                hold_times=hold_times,
-                deadtime_k0=args.deadtime_k0,
-                deadtime_window_s=args.deadtime_window_s,
-                stream=label,
+        # 3. Generate non-task overall plots for this epoch
+        all_tables = []
+        all_tables += plot_stream(pulses, epoch_outdir, "pulse", args.thresholds, args.bin_s)
+        all_tables += plot_stream(coinc, epoch_outdir, "coinc", args.thresholds, args.bin_s)
+
+        if not windows.empty:
+            all_tables.append(plot_windows(windows, epoch_outdir))
+
+        if not args.skip_lifetime:
+            life_thresholds = threshold_grid(
+                args.lifetime_threshold_min,
+                args.lifetime_threshold_max,
+                args.lifetime_threshold_step,
             )
-            fit_df.to_csv(outdir / f"{label}_lifetime_vs_pe.csv", index=False)
-            points_df.to_csv(outdir / f"{label}_lifetime_points_vs_pe.csv", index=False)
-            plot_lifetime_vs_pe(
-                fit_df,
-                outdir,
-                label,
-                use_chi2_scaled_error=args.chi2_scaled_error,
+            hold_times = tuple(args.hold_times)
+
+            for label, events in [("pulse", pulses), ("coinc", coinc)]:
+                if events.empty:
+                    continue
+                fit_df, points_df = compute_lifetime_vs_pe(
+                    events=events,
+                    duration_table=duration_table,
+                    rhdd=rhdd,
+                    thresholds=life_thresholds,
+                    hold_times=hold_times,
+                    deadtime_k0=args.deadtime_k0,
+                    deadtime_window_s=args.deadtime_window_s,
+                    stream=label,
+                )
+                fit_df.to_csv(epoch_outdir / f"{label}_lifetime_vs_pe.csv", index=False)
+                points_df.to_csv(epoch_outdir / f"{label}_lifetime_points_vs_pe.csv", index=False)
+                plot_lifetime_vs_pe(
+                    fit_df,
+                    epoch_outdir,
+                    label,
+                    use_chi2_scaled_error=args.chi2_scaled_error,
+                )
+                all_tables.append(fit_df)
+
+        nonempty = [t for t in all_tables if t is not None and not t.empty]
+        if nonempty:
+            pd.concat(nonempty, ignore_index=True, sort=False).to_csv(
+                epoch_outdir / "observable_summary_all.csv",
+                index=False,
             )
-            all_tables.append(fit_df)
 
-    nonempty = [t for t in all_tables if t is not None and not t.empty]
-    if nonempty:
-        pd.concat(nonempty, ignore_index=True, sort=False).to_csv(
-            outdir / "observable_summary_all.csv",
-            index=False,
-        )
-
-    print("done:", outdir)
+        print(f"Finished Epoch {epoch}. Output sent to: {epoch_outdir}")
 
 if __name__ == "__main__":
     main()
