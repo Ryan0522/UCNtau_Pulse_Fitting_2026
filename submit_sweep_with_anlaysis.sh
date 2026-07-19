@@ -3,15 +3,16 @@
 
 set -euo pipefail
 
-BASE=${BASE:-config/default_2021_fast.json}
+YEAR=${YEAR:-2022}
+BASE=${BASE:-config/default_2022.json}
 EXE=${EXE:-./build/run_batch_analysis}
-SWEEP_NAME=${SWEEP_NAME:-sweep_nll_delta_fast}
+SWEEP_NAME=${SWEEP_NAME:-sweep_nll_delta_2022}
 PARAM=${PARAM:-fit_settings.discovery_delta_nll_cut}
 LABEL=${LABEL:-nll}
 VALUES=${VALUES:-"5 10 15 20 25 30"}
 SHARDS=${SHARDS:-16}
-RDE_CSV=${RDE_CSV:-analysis/runinfo_2021_all.csv}
-OUTPUT_FOLDER=${OUTPUT_FOLDER:-output/2021}
+RDE_CSV=${RDE_CSV:-analysis/runinfo_2022_all.csv}
+OUTPUT_FOLDER=${OUTPUT_FOLDER:-output/2022}
 
 N_VALUES=$(wc -w <<< "$VALUES")
 N_TASKS=$((N_VALUES * SHARDS))
@@ -21,6 +22,7 @@ SWEEP_ROOT="$OUTPUT_FOLDER/$SWEEP_NAME"
 mkdir -p slurm_logs
 
 echo "Submitting sweep:"
+echo "  YEAR        = $YEAR"
 echo "  BASE        = $BASE"
 echo "  EXE         = $EXE"
 echo "  SWEEP_NAME  = $SWEEP_NAME"
@@ -44,7 +46,7 @@ an_jobid=$(sbatch --parsable \
   --account=chenyliu \
   --partition=secondary \
   --dependency=afterok:$run_jobid \
-  --export=ALL,SWEEP_ROOT="$SWEEP_ROOT",RDE_CSV="$RDE_CSV" \
+  --export=ALL,SWEEP_ROOT="$SWEEP_ROOT",RDE_CSV="$RDE_CSV",YEAR="$YEAR" \
   analysis_sweep.sh)
 
 echo "Submitted dependent analysis job: $an_jobid"

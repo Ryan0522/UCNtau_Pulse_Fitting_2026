@@ -20,6 +20,7 @@ mkdir -p slurm_logs
 set -euo pipefail
 : "${SWEEP_ROOT:?set SWEEP_ROOT, e.g. output/2021/sweep_nll_epoch2}"
 
+YEAR=${YEAR:-2022}
 PYTHON=${PYTHON:-python3}
 PLOT_SCRIPT=${PLOT_SCRIPT:-apps/plot_observables.py}
 RDE_CSV=${RDE_CSV:-analysis/runinfo_2021_all.csv}
@@ -41,5 +42,6 @@ for value_dir in "$SWEEP_ROOT"/*; do
     --lifetime-threshold-max "$LIFETIME_MAX" \
     --lifetime-threshold-step "$LIFETIME_STEP" \
     --deadtime-k0 "$DEADTIME_K0" \
-    --deadtime-window-s "$DEADTIME_WINDOW_S"
+    --deadtime-window-s "$DEADTIME_WINDOW_S" \
+    --year "$YEAR"
 done

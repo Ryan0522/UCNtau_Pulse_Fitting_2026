@@ -1,6 +1,7 @@
 build/
 output/
 logs/
+slurm_logs/
 *.sh
 *.o
 *.obj

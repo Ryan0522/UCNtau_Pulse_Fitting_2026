@@ -18,7 +18,7 @@
   "use_runinfo_windows": true,
   "runinfo_times_in_seconds": true,
 
-  "array_output_subdir": "test_tail_bg_fast",
+  "array_output_subdir": "tail_bg_fast",
   "shard_index": 0,
   "num_shards": 1,
 
