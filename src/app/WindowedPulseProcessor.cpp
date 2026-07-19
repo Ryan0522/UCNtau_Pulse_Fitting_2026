@@ -244,15 +244,18 @@ std::vector<Hit> WindowedPulseProcessor::select_hits(const std::vector<Hit>& hit
     return selected;
 }
 
-bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits,
-                                                    int start_index,
-                                                    double bin_width_us,
-                                                    const RegionSettings& region_settings,
-                                                    int& next_index,
-                                                    double& start_time_us,
-                                                    double& end_time_us,
-                                                    double& model_end_time_us,
-                                                    Histogram& histogram) const {
+bool WindowedPulseProcessor::build_window_histogram(
+    const std::vector<Hit>& hits,
+    int start_index,
+    double stream_start_us,
+    double bin_width_us,
+    const RegionSettings& region_settings,
+    int& next_index,
+    double& start_time_us,
+    double& end_time_us,
+    double& model_end_time_us,
+    Histogram& histogram
+) const {
     int n_hits = static_cast<int>(hits.size());
     if (start_index >= n_hits) {
         next_index = start_index;
@@ -268,10 +271,10 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
         bool armed = false;
         int total = 1;
 
-        for (int j = i + 1; j < n_hits; ++j) {
-            const double dt = hits[j].time_us - t0;
+        for (int k = i + 1; k < n_hits; ++k) {
+            const double dt = hits[k].time_us - t0;
             if (dt > region_settings.coincidence_window_us) break;
-            if (hits[j].channel != ch0) armed = true;
+            if (hits[k].channel != ch0) armed = true;
             ++total;
         }
 
@@ -288,23 +291,43 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
 
     const double seed_time_us = hits[seed_index].time_us;
 
+    int recovered_start_index = seed_index;
+    if (region_settings.recover_preseed_pile) {
+        while (recovered_start_index > start_index) {
+            const double previous_time_us = hits[recovered_start_index - 1].time_us;
+            const double current_time_us = hits[recovered_start_index].time_us;
+            const double gap_us = current_time_us - previous_time_us;
+
+            if (gap_us >= region_settings.min_gap_us) break;
+
+            const double lookback_us = seed_time_us - previous_time_us;
+            if (region_settings.max_preseed_lookback_us > 0.0 && lookback_us > region_settings.max_preseed_lookback_us) break;
+            
+            --recovered_start_index;
+        }
+    }
+
+    const double recovered_start_time_us = hits[recovered_start_index].time_us;
+
+    double left_partition_us = stream_start_us;
+    if (start_index > 0) {
+        const double previous_owned_hit_us = hits[start_index - 1].time_us;
+        const double first_unconsumed_hit_us = hts[start_index].time_us;
+        left_partition_us = std::max(stream_start_us, 0.5 * (previous_owned_hit_u + first_unconsumed_hit_us));
+    }
+
     int j = seed_index + 1;
-    double last_hit_time_us = hits[seed_index].time_us;
+    double last_hit_time_us = seed_time_us;
 
     if (region_settings.window_mode == "fixed_seed_window") {
         const double prepad_us = std::max(0.0, region_settings.fixed_seed_pretrigger_us);
         const double fixed_window_us = std::max(bin_width_us, region_settings.fixed_seed_window_us);
     
-        start_time_us = seed_time_us - prepad_us;
         double current_window_end_us = seed_time_us + fixed_window_us;
-        j = seed_index + 1;
-        last_hit_time_us = hits[seed_index].time_us;
-
         while (j < n_hits && hits[j].time_us < current_window_end_us) {
             const double t0 = hits[j].time_us;
             const int ch0 = hits[j].channel;
 
-            last_hit_time_us = t0;
             bool armed = false;
             int total = 1;
 
@@ -324,7 +347,14 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
             ++j;
         }
 
-        end_time_us = current_window_end_us;
+        last_hit_time_us = hits[j - 1].time_us;
+        double right_partition_us = std::numeric_limits<double>::infinity():
+        
+        if (j < n_hits)
+            right_partition_us = 0.5 * (hits[j - 1].time_us + hits[j].time_us);
+
+        start_time_us = std::max(left_partition_us, recovered_start_time_us - prepad_us);
+        end_time_us = std::min(current_window_end_us, right_partition_us);
         model_end_time_us = current_window_end_us;
         next_index = j;
 
@@ -340,12 +370,20 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
         const double prepad_us =  std::max(0.0, region_settings.fit_start_padding_us);
         const double postpad_us = std::max(0.0, region_settings.fit_end_padding_us);
 
-        start_time_us = seed_time_us - prepad_us;
+        double right_partition_us = std::numeric_limits<double>::infinity();
+        if (j < n_hits) 
+            right_partition_us = 0.5 * (hits[j - 1].time_us + hits[j].time_us);
+
+        start_time_us = std::max(left_partition_us, recovered_start_time_us - prepad_us);
         end_time_us = last_hit_time_us;
-        model_end_time_us = last_hit_time_us + postpad_us;
+        model_end_time_us = std::min(last_hit_time_us + postpad_us, right_partition_us);
 
         next_index = j;
     }
+
+    start_time_us = std::max(start_tims_us, stream_start_us);
+    if (!std::isfinite(start_time_us) || !std::isfinite(model_end_time_us) || model_end_time_us <= start_time_us) return false;
+    end_time_us = std::min(end_time_us, model_end_time_us);
 
     const double model_width_us = model_end_time_us - start_time_us;
     if (model_width_us < bin_width_us) {
@@ -358,10 +396,11 @@ bool WindowedPulseProcessor::build_window_histogram(const std::vector<Hit>& hits
     }
 
     histogram.bin_edges_us.clear();
+    histogram.bin_edges_us.reserve(static_cast<std::size_t>(n_bins + 1));
     histogram.counts.assign(static_cast<std::size_t>(n_bins), 0.0);
     
     for (int b = 0; b <= n_bins; ++b) {
-        histogram.bin_edges_us.push_back(start_time_us + b * bin_width_us);
+        histogram.bin_edges_us.push_back(start_time_us + static_cast<double>(b) * bin_width_us);
     }
 
     auto first_it = std::lower_bound(
@@ -489,6 +528,7 @@ void WindowedPulseProcessor::fit_stream(
 
         bool ok = build_window_histogram(hits,
                                          i,
+                                         stream_start_us,
                                          region_settings.coarse_bin_width_us,
                                          region_settings,
                                          next_index,

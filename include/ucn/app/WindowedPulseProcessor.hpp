@@ -40,6 +40,7 @@ private:
 
     bool build_window_histogram(const std::vector<Hit>& hits,
                                 int start_index,
+                                double stream_start_us,
                                 double bin_width_us,
                                 const RegionSettings& region_settings,
                                 int& next_index,

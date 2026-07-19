@@ -83,6 +83,9 @@ struct RegionSettings {
     double local_bg_guard_us = 10.0;
     double local_bg_alpha = 0.5; // update speed
     double local_bg_max_scale = 10.0;
+
+    bool recover_preseed_pile = true; // To prevent coincidence happening too late.
+    double max_preseed_lookback_us = 50.0;
 };
 
 struct RegionResult {

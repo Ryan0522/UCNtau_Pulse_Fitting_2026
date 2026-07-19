@@ -89,7 +89,10 @@
     "local_bg_min_us": 1000.0,
     "local_bg_guard_us": 10.0,
     "local_bg_alpha": 0.01,
-    "local_bg_max_scale": 100.0
+    "local_bg_max_scale": 100.0,
+
+    "recover_preseed_pile": true,
+    "max_preseed_lookback_us": 50.0
   },
 
   "tail_extraction_settings": {
@@ -107,6 +110,7 @@
   "fit_settings": {
     "scan_step_us": 0.5,
     "max_offset_us": 4.5,
+    "max_preseed_offset_us": 20.0,
     "cluster_gap_us": 5.0,
     "min_spacing_us": 1.0,
 

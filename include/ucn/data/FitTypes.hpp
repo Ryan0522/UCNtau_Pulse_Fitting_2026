@@ -25,6 +25,7 @@ struct FitSettings {
     // Scan / discovery
     double scan_step_us = 0.5;
     double max_offset_us = 5.0;
+    double max_preseed_offset_us = 20.0;
     double cluster_gap_us = 1.0;
     double min_spacing_us = 2.0;
 

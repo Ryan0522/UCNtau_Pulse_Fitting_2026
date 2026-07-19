@@ -18,6 +18,9 @@ void validate_fit_settings(const FitSettings& s) {
     if (s.max_offset_us < 0.0) {
         throw std::runtime_error("fit_settings.max_offset_us must be nonnegative.");
     }
+    if (s.max_preseed_offset_us < 0.0) {
+        throw std::runtime_error("fit_settings.max_preseed_offset_us must be nonnegative.");
+    }
     if (s.cluster_gap_us < 0.0) {
         throw std::runtime_error("fit_settings.cluster_gap_us must be nonnegative.");
     }
@@ -307,6 +310,11 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
             get_or<double>(r, "local_bg_alpha", cfg.region_settings.local_bg_alpha);
         cfg.region_settings.local_bg_max_scale =
             get_or<double>(r, "local_bg_max_scale", cfg.region_settings.local_bg_max_scale);
+    
+        cfg.region_settings.recover_preseed_pile =
+            get_or<bool>(r, "recover_preseed_pile", cfg.region_settings.recover_preseed_pile);
+        cfg.region_settings.max_preseed_lookback_us =
+            get_or<double>(r, "max_preseed_lookback_us", cfg.region_settings
     }
 
     if (j.contains("tail_extraction_settings")) {
@@ -344,6 +352,9 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
 
         cfg.fit_settings.max_offset_us =
             get_or(f, "max_offset_us", cfg.fit_settings.max_offset_us);
+
+        cfg.fit_settings.max_preseed_offset_us =
+            get_or(f, "max_preseed_offset_us", cfg.fit_settings.max_preseed_offset_us);
 
         cfg.fit_settings.cluster_gap_us =
             get_or(f, "cluster_gap_us", cfg.fit_settings.cluster_gap_us);

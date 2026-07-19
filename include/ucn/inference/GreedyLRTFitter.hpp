@@ -33,7 +33,7 @@ private:
         const FitSettings& settings
     ) const;
 
-    FitResult discover_local_sequential(
+    FitResult discover_global_greedy(
         const Histogram& histogram,
         const std::vector<ClusterBound>& bounds,
         const FitSettings& settings,
