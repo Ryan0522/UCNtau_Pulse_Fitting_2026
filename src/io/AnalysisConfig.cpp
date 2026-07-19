@@ -314,7 +314,7 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.region_settings.recover_preseed_pile =
             get_or<bool>(r, "recover_preseed_pile", cfg.region_settings.recover_preseed_pile);
         cfg.region_settings.max_preseed_lookback_us =
-            get_or<double>(r, "max_preseed_lookback_us", cfg.region_settings
+            get_or<double>(r, "max_preseed_lookback_us", cfg.region_settings.max_preseed_lookback_us);
     }
 
     if (j.contains("tail_extraction_settings")) {

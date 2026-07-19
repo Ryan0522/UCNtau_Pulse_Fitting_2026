@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <string>
 #include <numeric>
-#include <setL>
+#include <set>
 #include <utility>
 
 // This branch implements the local-sequential Greedy LRT fitter only.
@@ -42,10 +42,11 @@ double poisson_nll_bin(
 }
 
 int cluster_index_for_time(double time_us, const std::vector<ClusterBound>& bounds) {
+    constexpr double eps = 1.0e-9;
     for (std::size_t i = 0; i < bounds.size(); ++i) {
-        const bool inside_left = time_us >= bounds[i].left_us - 1.0e-9;
+        const bool inside_left = time_us >= bounds[i].left_us - eps;
         const bool inside_right = (i + 1 == bounds.size())
-            ? time_us <= bounds[i].right_us + 1.0e-9
+            ? time_us <= bounds[i].right_us + eps
             : time_us <= bounds[i].right_us;
 
         if (inside_left && inside_right) return static_cast<int>(i);
@@ -280,13 +281,13 @@ std::vector<ClusterBound> GreedyLRTFitter::build_cluster_bounds(
     const double bin_left_us  = histogram.bin_edges_us.front();
     const double bin_right_us = histogram.bin_edges_us.back();
 
-    for (std::size_t i = 0; i < centers.size(); ++i) {
+    for (std::size_t i = 0; i < clusters.size(); ++i) {
         if (clusters[i].empty()) continue;
 
         const double first_seed = clusters[i].front();
         const double last_seed = clusters[i].back();
 
-        double left_us = first_seed - settings.max_offset_us;
+        double left_us = first_seed - settings.max_preseed_offset_us;
         double right_us = last_seed + settings.max_offset_us;
 
         if (i > 0 && !clusters[i - 1].empty()) {
@@ -301,8 +302,8 @@ std::vector<ClusterBound> GreedyLRTFitter::build_cluster_bounds(
             right_us = std::min(right_us, right_midpoint);
         }
 
-        left_us = std::clamp(left_us, hist_left_us, hist_right_us);
-        right_us = std::clamp(right_us, hist_left_us, hist_right_us);
+        left_us = std::clamp(left_us, bin_left_us, bin_right_us);
+        right_us = std::clamp(right_us, bin_left_us, bin_right_us);
 
         if (right_us < left_us) right_us = left_us;
 
@@ -328,7 +329,7 @@ FitResult GreedyLRTFitter::discover_global_greedy(
     
     current.final_nll = likelihood::poisson_nll(
         histogram.counts,
-        result.expected_total,
+        current.expected_total,
         settings.fixed_expected,
         settings.background_per_bin
     );
@@ -338,7 +339,7 @@ FitResult GreedyLRTFitter::discover_global_greedy(
     std::set<std::pair<std::size_t, int>> blocked_candidates;
 
     auto candidate_is_too_close = [&](double candidate_time_us) {
-        for (const PulseCandidate& pulse : result.pulses) {
+        for (const PulseCandidate& pulse : current.pulses) {
             if (std::abs(pulse.time_us - candidate_time_us) < settings.min_spacing_us) {
                 return true;
             }
@@ -378,9 +379,9 @@ FitResult GreedyLRTFitter::discover_global_greedy(
     while(true) {
         const std::vector<int> pulses_per_cluster = count_pulses_by_cluster(current, bounds);
         
-        GlobalCanddiate best;
+        GlobalCandidate best;
 
-        for (std::size_t cluster_index = 0; cluster_index < bounds.size(); ++clsuter_index) {
+        for (std::size_t cluster_index = 0; cluster_index < bounds.size(); ++cluster_index) {
             if (pulses_per_cluster[cluster_index] >= settings.max_pulses_per_cluster) {
                 emit_debug_row(
                     "skip_cluster_full", fit_iter, static_cast<int>(cluster_index), bounds[cluster_index].cluster_time_us,
@@ -402,7 +403,7 @@ FitResult GreedyLRTFitter::discover_global_greedy(
                 }
 
                 const std::pair<std::size_t, int> candidate_key{cluster_index, scan_index};
-                if (blocked_candidates.contain(candidate_key)) continue;
+                if (blocked_candidates.contains(candidate_key)) continue;
 
                 if (candidate_is_too_close(time_us)) {
                     emit_debug_row(
@@ -413,7 +414,7 @@ FitResult GreedyLRTFitter::discover_global_greedy(
                 }
 
                 const std::vector<double> component = pulse_template_.shifted_to_histogram(time_us, histogram.bin_edges_us);
-                const double template_mass = std::accumulate(component.begin(), componeng.end(), 0.0);
+                const double template_mass = std::accumulate(component.begin(), component.end(), 0.0);
 
                 if (!std::isfinite(template_mass) || template_mass <= settings.local_template_mass_floor) {
                     emit_debug_row(
@@ -423,12 +424,12 @@ FitResult GreedyLRTFitter::discover_global_greedy(
                     continue;
                 }
 
-                const double amplitude = optimizer_cluster_local_full_amplitude(
-                    histogram, current.expected_total, component, settings.fixed_expected,
+                const double amplitude = likelihood::optimize_single_amplitude(
+                    histogram.counts, current.expected_total, component, settings.fixed_expected,
                     settings.background_per_bin, 0.0, settings.max_amplitude_pe, settings.min_amplitude_pe
                 );
 
-                if (!std::infinite(amplitude) || amplitude < settings.min_amplitude_pe) {
+                if (!std::isfinite(amplitude) || amplitude < settings.min_amplitude_pe) {
                     emit_debug_row(
                         "skip_low_amp", fit_iter, static_cast<int>(cluster_index), time_us, amplitude,
                         current.final_nll, current.final_nll, 0.0, -std::numeric_limits<double>::infinity(), 0
@@ -437,7 +438,7 @@ FitResult GreedyLRTFitter::discover_global_greedy(
                 }
 
                 const std::vector<double> trial_expected = add_scaled_component(current.expected_total, component, amplitude);
-                const double trial_nll = likelihood_poisson_nll(histogram.counts, trial_expected, settings.fixed_expected, settings.background_per_bin);
+                const double trial_nll = likelihood::poisson_nll(histogram.counts, trial_expected, settings.fixed_expected, settings.background_per_bin);
                 const double delta_nll = current.final_nll - trial_nll;
                 const double margin = delta_nll - settings.discovery_delta_nll_cut;
 
@@ -488,7 +489,7 @@ FitResult GreedyLRTFitter::discover_global_greedy(
         }
 
         emit_debug_row(
-            "accept_global", fit_iter, static_cast<int>(bes.cluster_index), best.time_us, best.amplitude_pe,
+            "accept_global", fit_iter, static_cast<int>(best.cluster_index), best.time_us, best.amplitude_pe,
             current.final_nll, proposed.final_nll, post_prune_delta_nll, post_prune_delta_nll - settings.discovery_delta_nll_cut, 1
         );
         

@@ -312,8 +312,8 @@ bool WindowedPulseProcessor::build_window_histogram(
     double left_partition_us = stream_start_us;
     if (start_index > 0) {
         const double previous_owned_hit_us = hits[start_index - 1].time_us;
-        const double first_unconsumed_hit_us = hts[start_index].time_us;
-        left_partition_us = std::max(stream_start_us, 0.5 * (previous_owned_hit_u + first_unconsumed_hit_us));
+        const double first_unconsumed_hit_us = hits[start_index].time_us;
+        left_partition_us = std::max(stream_start_us, 0.5 * (previous_owned_hit_us + first_unconsumed_hit_us));
     }
 
     int j = seed_index + 1;
@@ -348,7 +348,7 @@ bool WindowedPulseProcessor::build_window_histogram(
         }
 
         last_hit_time_us = hits[j - 1].time_us;
-        double right_partition_us = std::numeric_limits<double>::infinity():
+        double right_partition_us = std::numeric_limits<double>::infinity();
         
         if (j < n_hits)
             right_partition_us = 0.5 * (hits[j - 1].time_us + hits[j].time_us);
@@ -381,7 +381,7 @@ bool WindowedPulseProcessor::build_window_histogram(
         next_index = j;
     }
 
-    start_time_us = std::max(start_tims_us, stream_start_us);
+    start_time_us = std::max(start_time_us, stream_start_us);
     if (!std::isfinite(start_time_us) || !std::isfinite(model_end_time_us) || model_end_time_us <= start_time_us) return false;
     end_time_us = std::min(end_time_us, model_end_time_us);
 
@@ -526,16 +526,18 @@ void WindowedPulseProcessor::fit_stream(
         double model_end_time_us = 0.0;
         int next_index = i;
 
-        bool ok = build_window_histogram(hits,
-                                         i,
-                                         stream_start_us,
-                                         region_settings.coarse_bin_width_us,
-                                         region_settings,
-                                         next_index,
-                                         start_time_us,
-                                         end_time_us,
-                                         model_end_time_us,
-                                         coarse_histogram);
+        bool ok = build_window_histogram(
+            hits,
+            i,
+            stream_start_us,
+            region_settings.coarse_bin_width_us,
+            region_settings,
+            next_index,
+            start_time_us,
+            end_time_us,
+            model_end_time_us,
+            coarse_histogram)
+        ;
         if (!ok) {
             i = std::max(next_index, i + 1);
             continue;
@@ -547,15 +549,18 @@ void WindowedPulseProcessor::fit_stream(
 
         if (histogram.counts.size() < 2) {
             Histogram fine_histogram;
-            ok = build_window_histogram(hits,
-                                        i,
-                                        region_settings.fine_bin_width_us,
-                                        region_settings,
-                                        next_index,
-                                        start_time_us,
-                                        end_time_us,
-                                        model_end_time_us,
-                                        fine_histogram);
+            ok = build_window_histogram(
+                hits,
+                i,
+                stream_start_us,
+                region_settings.fine_bin_width_us,
+                region_settings,
+                next_index,
+                start_time_us,
+                end_time_us,
+                model_end_time_us,
+                fine_histogram
+            );
             if (!ok) {
                 i = std::max(next_index, i + 1);
                 continue;
