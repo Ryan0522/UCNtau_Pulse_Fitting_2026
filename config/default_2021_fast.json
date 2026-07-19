@@ -110,6 +110,8 @@
     "cluster_gap_us": 5.0,
     "min_spacing_us": 1.0,
 
+    "max_pulses_per_cluster": 5,
+
     "discovery_delta_nll_cut": 10.0,
     "local_template_mass_floor": 0.001,
 

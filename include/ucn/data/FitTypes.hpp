@@ -31,6 +31,9 @@ struct FitSettings {
     // LRT acceptance
     double discovery_delta_nll_cut = 10.0;
 
+    // NEW (2026 / 7 / 19) for multiple refits
+    int max_pulses_per_cluster = 1;
+
     // Amplitude bounds
     double min_amplitude_pe = 5.0;
     double max_amplitude_pe = 400.0;

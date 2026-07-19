@@ -48,6 +48,9 @@ void validate_fit_settings(const FitSettings& s) {
     if (s.max_prune_passes < 0) {
         throw std::runtime_error("fit_settings.max_prune_passes must be nonnegative.");
     }
+    if (s.max_pulses_per_cluster <= 0) {
+        throw std::runtime_error("fit_settings.max_pulses_per_cluster must be positive.");
+    }
 }
 
 template <typename T>
@@ -379,6 +382,10 @@ AnalysisConfig load_analysis_config(const std::string& config_path) {
         cfg.fit_settings.max_prune_passes =
             get_or(f, "max_prune_passes",
                     cfg.fit_settings.max_prune_passes);
+
+        cfg.fit_settings.max_pulses_per_cluster =
+            get_or(f, "max_pulses_per_cluster",
+                    cfg.fit_settings.max_pulses_per_cluster);
     }
 
     validate_fit_settings(cfg.fit_settings);
